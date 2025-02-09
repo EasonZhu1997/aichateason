@@ -35,6 +35,26 @@ const WELCOME_MESSAGE: Omit<Message, 'timestamp'> = {
   content: '你好！我是AI助理。我可以帮你回答问题、编写代码、解决问题等。请告诉我你需要什么帮助？'
 };
 
+// 添加常量定义
+const STORAGE_KEY = 'chat_history';
+const MAX_STORED_MESSAGES = 100;
+
+// 添加类型验证函数
+const isValidMessageRole = (role: string): role is Message['role'] => {
+  return ['assistant', 'system', 'user'].includes(role);
+};
+
+const isValidMessage = (message: any): message is Message => {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    typeof message.content === 'string' &&
+    typeof message.role === 'string' &&
+    isValidMessageRole(message.role) &&
+    (!message.timestamp || typeof message.timestamp === 'string')
+  );
+};
+
 export function ChatComponent() {
   const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -50,14 +70,48 @@ export function ChatComponent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingSpeedRef = useRef<ReturnType<typeof setInterval>>(null);
 
-  // 初始化
+  // 修改初始化逻辑
   useLayoutEffect(() => {
     setMounted(true);
-    setMessages([{
-      ...WELCOME_MESSAGE,
-      timestamp: new Date().toLocaleTimeString()
-    }]);
+    
+    try {
+      const storedMessages = localStorage.getItem(STORAGE_KEY);
+      if (storedMessages) {
+        const parsedData = JSON.parse(storedMessages);
+        // 验证并过滤消息
+        if (Array.isArray(parsedData)) {
+          const validMessages = parsedData.filter(isValidMessage);
+          setMessages(validMessages);
+        } else {
+          throw new Error('Invalid stored messages format');
+        }
+      } else {
+        setMessages([{
+          ...WELCOME_MESSAGE,
+          timestamp: new Date().toLocaleTimeString()
+        } as Message]);
+      }
+    } catch (error) {
+      console.error('Failed to load chat history:', error);
+      setMessages([{
+        ...WELCOME_MESSAGE,
+        timestamp: new Date().toLocaleTimeString()
+      } as Message]);
+    }
   }, []);
+
+  // 添加消息变化监听
+  useEffect(() => {
+    if (messages.length > 0) {
+      try {
+        // 如果消息数量超过限制,只保存最新的消息
+        const messagesToStore = messages.slice(-MAX_STORED_MESSAGES);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(messagesToStore));
+      } catch (error) {
+        console.error('Failed to save chat history:', error);
+      }
+    }
+  }, [messages]);
 
   // 滚动到底部，添加偏移量
   const scrollToBottom = () => {
@@ -82,34 +136,29 @@ export function ChatComponent() {
   const typewriterEffect = (text: string, newMessages: Message[]) => {
     let index = 0;
     
-    // 清理之前的interval
     if (typingSpeedRef.current) {
       clearInterval(typingSpeedRef.current);
     }
 
     typingSpeedRef.current = setInterval(() => {
       if (index < text.length) {
-        // 只更新当前显示的回复
         setCurrentResponse(text.slice(0, index + 1));
-        // 更新当前消息显示
         setCurrentMessage({
-          role: 'assistant',
+          role: 'assistant' as const,
           content: text.slice(0, index + 1),
           timestamp: new Date().toLocaleTimeString()
         });
         index++;
       } else {
-        // 完成时清理
         if (typingSpeedRef.current) {
           clearInterval(typingSpeedRef.current);
           typingSpeedRef.current = null;
         }
         
-        // 完成后一次性更新消息列表
         setMessages([
           ...newMessages,
           {
-            role: 'assistant',
+            role: 'assistant' as const,
             content: text,
             timestamp: new Date().toLocaleTimeString()
           }
@@ -127,7 +176,7 @@ export function ChatComponent() {
     const newMessages = [
       ...messages,
       { 
-        role: 'user', 
+        role: 'user' as const,
         content: input,
         timestamp: new Date().toLocaleTimeString() 
       }
@@ -139,7 +188,7 @@ export function ChatComponent() {
     
     // 显示加载状态
     setCurrentMessage({
-      role: 'assistant',
+      role: 'assistant' as const,
       content: '•••',
       timestamp: new Date().toLocaleTimeString(),
       loading: true
@@ -165,7 +214,7 @@ export function ChatComponent() {
       setMessages([
         ...newMessages,
         {
-          role: 'assistant',
+          role: 'assistant' as const,
           content: '抱歉,我现在有点累了,请稍后再试...',
           timestamp: new Date().toLocaleTimeString()
         }
@@ -175,7 +224,7 @@ export function ChatComponent() {
     }
   }
 
-  // 添加清除聊天的函数
+  // 修改清除聊天的函数
   const handleClearChat = () => {
     if (window.confirm('确定要清除所有聊天记录吗？')) {
       setMessages([{
@@ -185,6 +234,14 @@ export function ChatComponent() {
       setCurrentMessage(null);
       setError(null);
       setStatus('聊天已清除');
+      
+      // 清除localStorage中的聊天记录
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (error) {
+        console.error('Failed to clear chat history:', error);
+      }
+      
       setTimeout(() => setStatus(''), 2000);
     }
   };
