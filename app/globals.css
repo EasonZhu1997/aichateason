@@ -157,3 +157,37 @@ div:has(> [data-route-type]) {
 [data-nextjs-toast] {
   display: none !important;
 }
+
+/* 在现有的选择器列表中添加 */
+[data-nextjs-static-route-indicator],
+[data-nextjs-route-type="static"],
+.nextjs-static-route-indicator,
+.nextjs-route-announcer-static,
+div[class*="static-indicator"],
+[class*="static-indicator"],
+div:has(> [data-nextjs-static-route-indicator]),
+#__next-static-route-indicator,
+#__next-build-watcher[data-type="static"],
+[data-nextjs-dev-indicator="static"],
+/* 新增更多具体的选择器 */
+[data-nextjs-indicator-type="static"],
+[data-nextjs-route-status="static"],
+[data-route-type="static"],
+div[class*="route-type-static"],
+div[class*="static-route-badge"],
+[class*="static-route-badge"],
+[data-nextjs-static-badge],
+div:has(> [data-nextjs-static-badge]) {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  position: absolute !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  clip: rect(0 0 0 0) !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+}

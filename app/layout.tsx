@@ -80,6 +80,13 @@ export default function RootLayout({
             pointer-events: none !important;
             z-index: -1 !important;
           }
+          [data-nextjs-static-route-indicator],
+          .nextjs-static-route-indicator,
+          #__next-static-route-indicator {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+          }
         `}</style>
       </head>
       <body suppressHydrationWarning>
