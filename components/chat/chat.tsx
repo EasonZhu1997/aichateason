@@ -3,25 +3,205 @@
 import { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { Message, streamChat } from '@/services/chat';
 import { Card } from '@/components/ui/card';
-import { UserCircle, Bot, Trash2 } from 'lucide-react';
+import { UserCircle, Bot, Trash2, ChevronDown } from 'lucide-react';
 
 const MODELS = [
+  // DeepSeek 系列
   {
     id: 'deepseek-chat',
     name: '原生-DeepSeek-Chat',
-    useDeepseekAPI: true
+    description: 'DeepSeek 官方对话模型',
+    provider: 'deepseek'
   },
   {
-    id: 'deepseek-ai/DeepSeek-V3',
-    name: '硅基流动-DeepSeek-V3'
+    id: 'Pro/deepseek-ai/DeepSeek-V3',
+    name: '硅基-DeepSeek-V3',
+    description: '硅基加速版 DeepSeek V3',
+    provider: 'silicon'
   },
   {
-    id: 'deepseek-ai/DeepSeek-R1',
-    name: '硅基流动-DeepSeek-R1'
+    id: 'deepseek-ai/DeepSeek-R1-Distill-Llama-70B',
+    name: '硅基-DeepSeek-R1',
+    description: '硅基加速版 DeepSeek R1',
+    provider: 'silicon'
   },
+  {
+    id: 'deepseek-ai/deepseek-coder-33b-instruct',
+    name: '硅基-DeepSeek-Coder-33B',
+    description: 'DeepSeek 33B代码模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'deepseek-ai/deepseek-coder-6.7b-instruct',
+    name: '硅基-DeepSeek-Coder-6.7B',
+    description: 'DeepSeek 6.7B代码模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'deepseek-ai/deepseek-math-7b-instruct',
+    name: '硅基-DeepSeek-Math-7B',
+    description: 'DeepSeek 数学专用模型',
+    provider: 'silicon'
+  },
+  // Qwen 系列
   {
     id: 'Qwen/Qwen2.5-Coder-7B-Instruct',
-    name: '硅基流动-Qwen2.5-Coder'
+    name: '硅基-Qwen2.5-Coder',
+    description: '通义千问代码专用模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'Qwen/Qwen1.5-72B-Chat',
+    name: '硅基-Qwen1.5-72B',
+    description: '通义千问72B大模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'Qwen/Qwen1.5-14B-Chat',
+    name: '硅基-Qwen1.5-14B',
+    description: '通义千问14B模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'Qwen/Qwen2.5-72B-Chat',
+    name: '硅基-Qwen2.5-72B',
+    description: '通义千问2.5代72B模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'Qwen/Qwen2.5-4B-Chat',
+    name: '硅基-Qwen2.5-4B',
+    description: '通义千问2.5代轻量版',
+    provider: 'silicon'
+  },
+  {
+    id: 'Qwen/Qwen2.5-7B-Chat',
+    name: '硅基-Qwen2.5-7B',
+    description: '通义千问2.5代7B版',
+    provider: 'silicon'
+  },
+  // Yi 系列
+  {
+    id: 'Yi/Yi-34B-Chat',
+    name: '硅基-Yi-34B',
+    description: '零一万物34B模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'Yi/Yi-6B-Chat',
+    name: '硅基-Yi-6B',
+    description: '零一万物6B轻量版',
+    provider: 'silicon'
+  },
+  {
+    id: 'Yi/Yi-9B-Chat',
+    name: '硅基-Yi-9B',
+    description: '零一万物9B中型版',
+    provider: 'silicon'
+  },
+  // Mixtral 系列
+  {
+    id: 'mistralai/Mixtral-8x7B-Instruct-v0.1',
+    name: '硅基-Mixtral-8x7B',
+    description: 'Mistral 最新混合专家模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'mistralai/Mixtral-8x7B-Instruct',
+    name: '硅基-Mixtral-8x7B-优化版',
+    description: 'Mistral MoE优化版本',
+    provider: 'silicon'
+  },
+  // Llama2 系列
+  {
+    id: 'meta-llama/Llama-2-70b-chat-hf',
+    name: '硅基-Llama2-70B',
+    description: 'Meta 70B大模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'meta-llama/Llama-2-13b-chat-hf',
+    name: '硅基-Llama2-13B',
+    description: 'Meta 13B中型模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'meta-llama/Llama-2-7b-chat-hf',
+    name: '硅基-Llama2-7B',
+    description: 'Meta 7B轻量版',
+    provider: 'silicon'
+  },
+  // ChatGLM 系列
+  {
+    id: 'THUDM/chatglm3-6b',
+    name: '硅基-ChatGLM3-6B',
+    description: '清华智谱6B模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'THUDM/chatglm3-6b-base',
+    name: '硅基-ChatGLM3-6B-Base',
+    description: '智谱GLM3基础版',
+    provider: 'silicon'
+  },
+  {
+    id: 'THUDM/chatglm3-6b-32k',
+    name: '硅基-ChatGLM3-6B-32K',
+    description: '智谱GLM3长文本版',
+    provider: 'silicon'
+  },
+  // Baichuan 系列
+  {
+    id: 'baichuan-inc/Baichuan2-13B-Chat',
+    name: '硅基-Baichuan2-13B',
+    description: '百川智能13B模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'baichuan-inc/Baichuan2-7B-Chat',
+    name: '硅基-Baichuan2-7B',
+    description: '百川智能7B轻量版',
+    provider: 'silicon'
+  },
+  // InternLM 系列
+  {
+    id: 'internlm/internlm2-chat-20b',
+    name: '硅基-InternLM2-20B',
+    description: '书生浦语20B模型',
+    provider: 'silicon'
+  },
+  {
+    id: 'internlm/internlm2-chat-7b',
+    name: '硅基-InternLM2-7B',
+    description: '书生浦语7B模型',
+    provider: 'silicon'
+  },
+  // Zephyr 系列
+  {
+    id: 'HuggingFaceH4/zephyr-7b-beta',
+    name: '硅基-Zephyr-7B',
+    description: 'Zephyr 7B基础版',
+    provider: 'silicon'
+  },
+  // Solar 系列
+  {
+    id: 'upstage/SOLAR-10.7B-Instruct-v1.0',
+    name: '硅基-Solar-10.7B',
+    description: 'Upstage Solar模型',
+    provider: 'silicon'
+  },
+  // Gemma 系列
+  {
+    id: 'google/gemma-7b-it',
+    name: '硅基-Gemma-7B',
+    description: 'Google Gemma 7B',
+    provider: 'silicon'
+  },
+  {
+    id: 'google/gemma-2b-it',
+    name: '硅基-Gemma-2B',
+    description: 'Google Gemma 2B轻量版',
+    provider: 'silicon'
   }
 ] as const;
 
@@ -260,19 +440,29 @@ export function ChatComponent() {
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 border-b 
                       dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
         <div className="flex items-center gap-4">
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            disabled={isLoading}
-            className="w-48 p-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                       bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
-          >
-            {MODELS.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              disabled={isLoading}
+              className="w-64 p-2 pr-8 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 
+                         bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200
+                         appearance-none cursor-pointer"
+            >
+              {MODELS.map((model) => (
+                <option 
+                  key={model.id} 
+                  value={model.id} 
+                  className="py-2"
+                >
+                  {model.name} {model.description ? `• ${model.description}` : ''}
+                </option>
+              ))}
+            </select>
+            <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
+              <ChevronDown size={16} className="text-gray-500" />
+            </div>
+          </div>
           
           <button
             onClick={handleClearChat}
@@ -397,18 +587,21 @@ export function ChatComponent() {
         {/* 状态栏 */}
         <div className="w-full max-w-3xl mx-auto px-4">
           <div className="text-center text-xs text-gray-500 dark:text-gray-400 py-1">
-            {MODELS.find(m => m.id === selectedModel)?.name}
-            {isLoading && (
-              <span className="ml-2">• AI正在思考中...</span>
-            )}
-            <span className="ml-2">
-              • 消息记录: {messages.length}/{MAX_STORED_MESSAGES}
-              {messages.length > MAX_STORED_MESSAGES * 0.8 && (
-                <span className="text-yellow-500 ml-1">
-                  (接近上限，将自动清除较早消息)
+            {/* 显示当前模型信息 */}
+            {(() => {
+              const currentModel = MODELS.find(m => m.id === selectedModel);
+              return currentModel ? (
+                <span>
+                  {currentModel.name}
+                  {currentModel.description && (
+                    <span className="text-gray-400 ml-1">
+                      • {currentModel.description}
+                    </span>
+                  )}
                 </span>
-              )}
-            </span>
+              ) : null;
+            })()}
+            {/* 其他状态信息 */}
           </div>
         </div>
       </div>

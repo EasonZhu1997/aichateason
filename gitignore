@@ -1,0 +1,5 @@
+node_modules/
+.next/
+
+# 添加环境变量文件
+.env*.local 
