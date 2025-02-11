@@ -107,6 +107,12 @@ export function ChatComponent() {
         // 如果消息数量超过限制,只保存最新的消息
         const messagesToStore = messages.slice(-MAX_STORED_MESSAGES);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(messagesToStore));
+        
+        // 添加接近限制的提示
+        if (messages.length > MAX_STORED_MESSAGES * 0.8 && messages.length <= MAX_STORED_MESSAGES) {
+          setStatus('提示：聊天记录接近上限，较早的消息将被自动清除');
+          setTimeout(() => setStatus(''), 3000);
+        }
       } catch (error) {
         console.error('Failed to save chat history:', error);
       }
@@ -395,6 +401,14 @@ export function ChatComponent() {
             {isLoading && (
               <span className="ml-2">• AI正在思考中...</span>
             )}
+            <span className="ml-2">
+              • 消息记录: {messages.length}/{MAX_STORED_MESSAGES}
+              {messages.length > MAX_STORED_MESSAGES * 0.8 && (
+                <span className="text-yellow-500 ml-1">
+                  (接近上限，将自动清除较早消息)
+                </span>
+              )}
+            </span>
           </div>
         </div>
       </div>
