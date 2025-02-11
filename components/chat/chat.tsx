@@ -22,6 +22,21 @@ const MODELS = [
   {
     id: 'Qwen/Qwen2.5-Coder-7B-Instruct',
     name: '硅基流动-Qwen2.5-Coder'
+  },
+  {
+    id: 'gpt-4-turbo-preview',
+    name: 'GPT-4 Turbo',
+    useOpenAI: true
+  },
+  {
+    id: 'gpt-4',
+    name: 'GPT-4',
+    useOpenAI: true
+  },
+  {
+    id: 'gpt-3.5-turbo',
+    name: 'GPT-3.5 Turbo',
+    useOpenAI: true
   }
 ] as const;
 

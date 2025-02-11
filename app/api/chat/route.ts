@@ -1,7 +1,7 @@
 import { OpenAI } from 'openai';
 import { NextResponse } from 'next/server';
 
-// 创建两个客户端实例
+// 创建三个客户端实例
 const siliconClient = new OpenAI({
   apiKey: process.env.SILICON_API_KEY,
   baseURL: process.env.SILICON_API_BASE_URL,
@@ -15,6 +15,10 @@ const deepseekClient = new OpenAI({
   baseURL: process.env.DEEPSEEK_API_BASE,
 });
 
+const openaiClient = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY, // 使用提供的 key
+});
+
 export async function POST(req: Request) {
   try {
     const { messages, model } = await req.json();
@@ -26,9 +30,17 @@ export async function POST(req: Request) {
       );
     }
 
-    // 根据模型选择使用不同的客户端和配置
-    const client = model === 'deepseek-chat' ? deepseekClient : siliconClient;
-    const modelId = model === 'deepseek-chat' ? 'deepseek-chat' : model;
+    // 根据模型选择使用不同的客户端
+    let client;
+    let modelId = model;
+    
+    if (model === 'deepseek-chat') {
+      client = deepseekClient;
+    } else if (model.startsWith('gpt-')) {
+      client = openaiClient;
+    } else {
+      client = siliconClient;
+    }
 
     const response = await client.chat.completions.create({
       model: modelId,
