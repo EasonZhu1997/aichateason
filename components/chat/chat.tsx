@@ -3,7 +3,7 @@
 import { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { Message, streamChat } from '@/services/chat';
 import { Card } from '@/components/ui/card';
-import { UserCircle, Bot, Trash2 } from 'lucide-react';
+import { UserCircle, Bot } from 'lucide-react';
 
 const MODELS = [
   {
@@ -292,12 +292,14 @@ export function ChatComponent() {
           <button
             onClick={handleClearChat}
             disabled={isLoading || messages.length <= 1}
-            className="p-2 text-gray-500 hover:text-red-500 disabled:opacity-50 
-                       disabled:cursor-not-allowed transition-colors duration-200
-                       dark:text-gray-400 dark:hover:text-red-400"
+            className="px-3 py-1.5 text-sm text-white bg-red-500 hover:bg-red-600 
+                       disabled:opacity-50 disabled:cursor-not-allowed 
+                       transition-colors duration-200
+                       dark:bg-red-600 dark:hover:bg-red-700
+                       rounded"
             title="清除聊天记录"
           >
-            <Trash2 size={20} />
+            重新聊天
           </button>
         </div>
       </div>
