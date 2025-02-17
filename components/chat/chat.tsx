@@ -95,6 +95,8 @@ export function ChatComponent() {
   const [fullResponse, setFullResponse] = useState<string>('');
   const [currentMessage, setCurrentMessage] = useState<Message | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingSpeedRef = useRef<ReturnType<typeof setInterval>>(null);
@@ -203,7 +205,10 @@ export function ChatComponent() {
   // 修改重新生成的处理方式
   const handleRegenerate = async (messageId: string) => {
     setRegeneratingMessageId(messageId);
-    setIsLoading(true);
+    setIsGenerating(true);
+    
+    // 创建新的 AbortController
+    abortControllerRef.current = new AbortController();
     
     try {
       let fullText = '';
@@ -218,50 +223,63 @@ export function ChatComponent() {
       const previousMessages = messages.slice(0, messageIndex);
       const messagesWithSystem = [SYSTEM_MESSAGE, ...previousMessages];
       
-      for await (const chunk of streamChat(messagesWithSystem, selectedModel)) {
+      for await (const chunk of streamChat(messagesWithSystem, selectedModel, abortControllerRef.current.signal)) {
+        if (!abortControllerRef.current) break; // 检查是否已中断
         fullText += chunk;
         setFullResponse(fullText);
       }
-      
-      // 更新特定消息的内容
-      setMessages(messages.map(m => {
-        if (m.id === messageId) {
-          return {
-            ...m,
-            content: fullText,
-            timestamp: new Date().toLocaleTimeString()
-          };
-        }
-        return m;
-      }));
+
+      if (abortControllerRef.current) { // 只有在未中断时才更新消息
+        // 使用打字机效果更新消息
+        typewriterEffect(fullText, messages.slice(0, messageIndex));
+      }
       
     } catch (err) {
-      console.error('Regenerate error:', err);
-      // 错误时只更新这条消息
-      setMessages(messages.map(m => {
-        if (m.id === messageId) {
-          return {
-            ...m,
-            content: '抱歉，重新生成失败，请稍后再试...',
-            timestamp: new Date().toLocaleTimeString()
-          };
-        }
-        return m;
-      }));
+      if (err.name !== 'AbortError') {
+        console.error('Regenerate error:', err);
+        // 错误时只更新这条消息
+        setMessages(messages.map(m => {
+          if (m.id === messageId) {
+            return {
+              ...m,
+              content: '抱歉，重新生成失败，请稍后再试...',
+              timestamp: new Date().toLocaleTimeString()
+            };
+          }
+          return m;
+        }));
+      }
     } finally {
-      setIsLoading(false);
+      setIsGenerating(false);
       setRegeneratingMessageId(null);
+      abortControllerRef.current = null;
     }
   };
 
+  // 添加停止生成的处理函数
+  const handleStopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsGenerating(false);
+      
+      // 如果是重新生成,则恢复原消息
+      if (regeneratingMessageId) {
+        setRegeneratingMessageId(null);
+        setCurrentMessage(null);
+      }
+    }
+  };
+
+  // 修改 handleSubmit 函数
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isGenerating) return;
 
     const newMessages = [
       ...messages,
       { 
-        id: generateMessageId(), // 添加唯一id
+        id: generateMessageId(),
         role: 'user' as const,
         content: input,
         timestamp: new Date().toLocaleTimeString() 
@@ -269,46 +287,43 @@ export function ChatComponent() {
     ];
     setMessages(newMessages);
     setInput('');
-    setIsLoading(true);
+    setIsGenerating(true);
     setError(null);
-    
-    // 显示加载状态
-    setCurrentMessage({
-      id: generateMessageId(), // 添加唯一id
-      role: 'assistant' as const,
-      content: '•••',
-      timestamp: new Date().toLocaleTimeString(),
-      loading: true
-    });
 
+    // 创建新的 AbortController
+    abortControllerRef.current = new AbortController();
+    
     try {
       let fullText = '';
       const messagesWithSystem = [SYSTEM_MESSAGE, ...newMessages];
       
-      // 收集完整响应
-      for await (const chunk of streamChat(messagesWithSystem, selectedModel)) {
+      for await (const chunk of streamChat(messagesWithSystem, selectedModel, abortControllerRef.current.signal)) {
+        if (!abortControllerRef.current) break; // 检查是否已中断
         fullText += chunk;
-        setFullResponse(fullText); // 保存完整响应
+        setFullResponse(fullText);
       }
 
-      // 收集完所有响应后,开始打字机效果
-      typewriterEffect(fullText, newMessages);
+      if (abortControllerRef.current) { // 只有在未中断时才更新消息
+        typewriterEffect(fullText, newMessages);
+      }
 
     } catch (err) {
-      // 错误处理
-      setCurrentMessage(null);
-      setFullResponse('');
-      setMessages([
-        ...newMessages,
-        {
-          id: generateMessageId(), // 添加唯一id
-          role: 'assistant' as const,
-          content: '抱歉,我现在有点累了,请稍后再试...',
-          timestamp: new Date().toLocaleTimeString()
-        }
-      ]);
+      if (err.name !== 'AbortError') {
+        setCurrentMessage(null);
+        setFullResponse('');
+        setMessages([
+          ...newMessages,
+          {
+            id: generateMessageId(),
+            role: 'assistant' as const,
+            content: '抱歉,我现在有点累了,请稍后再试...',
+            timestamp: new Date().toLocaleTimeString()
+          }
+        ]);
+      }
     } finally {
-      setIsLoading(false);
+      setIsGenerating(false);
+      abortControllerRef.current = null;
     }
   }
 
@@ -346,7 +361,7 @@ export function ChatComponent() {
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
-            disabled={isLoading}
+            disabled={isGenerating}
             className="w-48 p-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent 
                        bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
           >
@@ -359,7 +374,7 @@ export function ChatComponent() {
           
           <button
             onClick={handleClearChat}
-            disabled={isLoading || messages.length <= 1}
+            disabled={isGenerating || messages.length <= 1}
             className="px-3 py-1.5 text-sm text-white bg-red-500 hover:bg-red-600 
                        disabled:opacity-50 disabled:cursor-not-allowed 
                        transition-colors duration-200
@@ -456,23 +471,36 @@ export function ChatComponent() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={isLoading ? "AI正在思考中..." : "输入消息..."}
-              disabled={isLoading}
+              placeholder={isGenerating ? "AI正在思考中..." : "输入消息..."}
+              disabled={isGenerating}
               className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent
                          bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200
                          placeholder-gray-400 dark:placeholder-gray-500"
             />
-            <button 
-              type="submit"
-              disabled={isLoading}
-              className="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 
-                         disabled:opacity-50 disabled:cursor-not-allowed
-                         transition-colors duration-200
-                         dark:bg-blue-600 dark:hover:bg-blue-700
-                         whitespace-nowrap"
-            >
-              {isLoading ? '等待回复...' : '发送'}
-            </button>
+            {isGenerating ? (
+              <button
+                type="button"
+                onClick={handleStopGeneration}
+                className="px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 
+                          transition-colors duration-200
+                          dark:bg-red-600 dark:hover:bg-red-700
+                          whitespace-nowrap"
+              >
+                停止生成
+              </button>
+            ) : (
+              <button 
+                type="submit"
+                disabled={!input.trim()}
+                className="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 
+                          disabled:opacity-50 disabled:cursor-not-allowed
+                          transition-colors duration-200
+                          dark:bg-blue-600 dark:hover:bg-blue-700
+                          whitespace-nowrap"
+              >
+                发送
+              </button>
+            )}
           </form>
         </div>
 
@@ -480,7 +508,7 @@ export function ChatComponent() {
         <div className="w-full max-w-3xl mx-auto px-4">
           <div className="text-center text-xs text-gray-500 dark:text-gray-400 py-1">
             {MODELS.find(m => m.id === selectedModel)?.name}
-            {isLoading && (
+            {isGenerating && (
               <span className="ml-2">• AI正在思考中...</span>
             )}
             <span className="ml-2">
