@@ -26,6 +26,7 @@ export function MessageBubble({
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const isTouchMovedRef = useRef(false);
   const scrollPositionRef = useRef(0);
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   // 控制页面滚动
   useEffect(() => {
@@ -192,7 +193,6 @@ export function MessageBubble({
     
     // 使用 setTimeout 确保状态更新后再选择文本
     setTimeout(() => {
-      // 直接找到包含文本内容的 div
       const textElement = bubbleRef.current?.querySelector('.whitespace-pre-wrap');
       if (textElement) {
         const selection = window.getSelection();
@@ -206,23 +206,41 @@ export function MessageBubble({
         
         // 滚动到选中区域
         textElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        
+        // 阻止接下来 500ms 内的点击事件取消选择
+        const currentTime = Date.now();
+        const handleClickWithDelay = (e: MouseEvent) => {
+          if (Date.now() - currentTime < 500) return;
+          if (isSelectable && bubbleRef.current && !bubbleRef.current.contains(e.target as Node)) {
+            setIsSelectable(false);
+            setShowMenu(false);
+            bubbleRef.current.classList.remove('selecting');
+            document.removeEventListener('click', handleClickWithDelay);
+          }
+        };
+        
+        document.addEventListener('click', handleClickWithDelay);
+        
+        // 保存清理函数到ref中
+        cleanupRef.current = () => {
+          document.removeEventListener('click', handleClickWithDelay);
+        };
       }
     }, 0);
   };
 
-  // 监听点击事件，处理选择文本后的状态
+  // 组件卸载时的清理
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (isSelectable && bubbleRef.current && !bubbleRef.current.contains(e.target as Node)) {
-        setIsSelectable(false);
-        setShowMenu(false);
-        bubbleRef.current.classList.remove('selecting');
+    return () => {
+      // 执行所有需要的清理
+      if (cleanupRef.current) {
+        cleanupRef.current();
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
       }
     };
-
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, [isSelectable]);
+  }, []);
 
   return (
     <div className="relative">

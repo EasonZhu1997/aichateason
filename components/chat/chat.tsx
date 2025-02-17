@@ -46,7 +46,7 @@ const SYSTEM_MESSAGE: Message = {
   content: '你是一个有帮助的AI助理。请始终使用中文回复。保持友好和专业的态度。'
 };
 
-const WELCOME_MESSAGE: Omit<Message, 'timestamp'> = {
+const WELCOME_MESSAGE: Omit<Message, 'timestamp' | 'id'> = {
   role: 'assistant',
   content: '你好！我是AI助理。我可以帮你回答问题、编写代码、解决问题等。请告诉我你需要什么帮助？'
 };
@@ -70,6 +70,18 @@ const isValidMessage = (message: any): message is Message => {
     (!message.timestamp || typeof message.timestamp === 'string')
   );
 };
+
+// 添加生成唯一ID的函数
+const generateMessageId = () => {
+  return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+};
+
+// 创建带id的欢迎消息的辅助函数
+const createWelcomeMessage = () => ({
+  ...WELCOME_MESSAGE,
+  id: generateMessageId(),
+  timestamp: new Date().toLocaleTimeString()
+});
 
 export function ChatComponent() {
   const [mounted, setMounted] = useState(false);
@@ -95,7 +107,6 @@ export function ChatComponent() {
       const storedMessages = localStorage.getItem(STORAGE_KEY);
       if (storedMessages) {
         const parsedData = JSON.parse(storedMessages);
-        // 验证并过滤消息
         if (Array.isArray(parsedData)) {
           const validMessages = parsedData.filter(isValidMessage);
           setMessages(validMessages);
@@ -103,17 +114,11 @@ export function ChatComponent() {
           throw new Error('Invalid stored messages format');
         }
       } else {
-        setMessages([{
-          ...WELCOME_MESSAGE,
-          timestamp: new Date().toLocaleTimeString()
-        } as Message]);
+        setMessages([createWelcomeMessage()]);
       }
     } catch (error) {
       console.error('Failed to load chat history:', error);
-      setMessages([{
-        ...WELCOME_MESSAGE,
-        timestamp: new Date().toLocaleTimeString()
-      } as Message]);
+      setMessages([createWelcomeMessage()]);
     }
   }, []);
 
@@ -165,12 +170,14 @@ export function ChatComponent() {
 
     typingSpeedRef.current = setInterval(() => {
       if (index < text.length) {
-        setCurrentResponse(text.slice(0, index + 1));
-        setCurrentMessage({
+        const partialMessage = {
+          id: generateMessageId(), // 添加唯一id
           role: 'assistant' as const,
           content: text.slice(0, index + 1),
           timestamp: new Date().toLocaleTimeString()
-        });
+        };
+        setCurrentResponse(text.slice(0, index + 1));
+        setCurrentMessage(partialMessage);
         index++;
       } else {
         if (typingSpeedRef.current) {
@@ -181,6 +188,7 @@ export function ChatComponent() {
         setMessages([
           ...newMessages,
           {
+            id: generateMessageId(), // 添加唯一id
             role: 'assistant' as const,
             content: text,
             timestamp: new Date().toLocaleTimeString()
@@ -194,28 +202,52 @@ export function ChatComponent() {
 
   // 修改重新生成的处理方式
   const handleRegenerate = async (messageId: string) => {
-    setMessages(messages.filter(m => m.id !== messageId));
+    setRegeneratingMessageId(messageId);
     setIsLoading(true);
     
     try {
       let fullText = '';
-      const messagesWithSystem = [SYSTEM_MESSAGE, ...messages.filter(m => m.id === messageId)];
+      
+      // 找到目标消息的索引
+      const messageIndex = messages.findIndex(m => m.id === messageId);
+      if (messageIndex === -1) {
+        throw new Error('Message not found');
+      }
+      
+      // 获取到该消息之前的所有消息历史
+      const previousMessages = messages.slice(0, messageIndex);
+      const messagesWithSystem = [SYSTEM_MESSAGE, ...previousMessages];
       
       for await (const chunk of streamChat(messagesWithSystem, selectedModel)) {
         fullText += chunk;
         setFullResponse(fullText);
       }
       
-      typewriterEffect(fullText, messages.filter(m => m.id === messageId));
-    } catch (err) {
-      setMessages([
-        ...messages.filter(m => m.id !== messageId),
-        {
-          role: 'assistant',
-          content: '抱歉，重新生成失败，请稍后再试...',
-          timestamp: new Date().toLocaleTimeString()
+      // 更新特定消息的内容
+      setMessages(messages.map(m => {
+        if (m.id === messageId) {
+          return {
+            ...m,
+            content: fullText,
+            timestamp: new Date().toLocaleTimeString()
+          };
         }
-      ]);
+        return m;
+      }));
+      
+    } catch (err) {
+      console.error('Regenerate error:', err);
+      // 错误时只更新这条消息
+      setMessages(messages.map(m => {
+        if (m.id === messageId) {
+          return {
+            ...m,
+            content: '抱歉，重新生成失败，请稍后再试...',
+            timestamp: new Date().toLocaleTimeString()
+          };
+        }
+        return m;
+      }));
     } finally {
       setIsLoading(false);
       setRegeneratingMessageId(null);
@@ -229,6 +261,7 @@ export function ChatComponent() {
     const newMessages = [
       ...messages,
       { 
+        id: generateMessageId(), // 添加唯一id
         role: 'user' as const,
         content: input,
         timestamp: new Date().toLocaleTimeString() 
@@ -241,6 +274,7 @@ export function ChatComponent() {
     
     // 显示加载状态
     setCurrentMessage({
+      id: generateMessageId(), // 添加唯一id
       role: 'assistant' as const,
       content: '•••',
       timestamp: new Date().toLocaleTimeString(),
@@ -267,6 +301,7 @@ export function ChatComponent() {
       setMessages([
         ...newMessages,
         {
+          id: generateMessageId(), // 添加唯一id
           role: 'assistant' as const,
           content: '抱歉,我现在有点累了,请稍后再试...',
           timestamp: new Date().toLocaleTimeString()
@@ -280,15 +315,11 @@ export function ChatComponent() {
   // 修改清除聊天的函数
   const handleClearChat = () => {
     if (window.confirm('确定要清除所有聊天记录吗？')) {
-      setMessages([{
-        ...WELCOME_MESSAGE,
-        timestamp: new Date().toLocaleTimeString()
-      }]);
+      setMessages([createWelcomeMessage()]);
       setCurrentMessage(null);
       setError(null);
       setStatus('聊天已清除');
       
-      // 清除localStorage中的聊天记录
       try {
         localStorage.removeItem(STORAGE_KEY);
       } catch (error) {
