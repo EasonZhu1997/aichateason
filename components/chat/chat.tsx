@@ -204,50 +204,62 @@ export function ChatComponent() {
 
   // 修改重新生成的处理方式
   const handleRegenerate = async (messageId: string) => {
+    if (isGenerating) return;
+    
+    // 找到要重新生成的消息及其之前的所有消息
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+    
+    const previousMessages = messages.slice(0, messageIndex);
+    
+    // 设置重新生成状态
     setRegeneratingMessageId(messageId);
     setIsGenerating(true);
+    setError(null);
+    
+    // 保存原始消息用于恢复
+    const originalMessage = messages[messageIndex];
     
     // 创建新的 AbortController
     abortControllerRef.current = new AbortController();
     
     try {
       let fullText = '';
-      
-      // 找到目标消息的索引
-      const messageIndex = messages.findIndex(m => m.id === messageId);
-      if (messageIndex === -1) {
-        throw new Error('Message not found');
-      }
-      
-      // 获取到该消息之前的所有消息历史
-      const previousMessages = messages.slice(0, messageIndex);
+      // 包含系统消息
       const messagesWithSystem = [SYSTEM_MESSAGE, ...previousMessages];
       
+      // 使用 streamChat 函数
       for await (const chunk of streamChat(messagesWithSystem, selectedModel, abortControllerRef.current.signal)) {
         if (!abortControllerRef.current) break; // 检查是否已中断
         fullText += chunk;
-        setFullResponse(fullText);
-      }
-
-      if (abortControllerRef.current) { // 只有在未中断时才更新消息
-        // 使用打字机效果更新消息
-        typewriterEffect(fullText, messages.slice(0, messageIndex));
-      }
-      
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('Regenerate error:', err);
-        // 错误时只更新这条消息
-        setMessages(messages.map(m => {
-          if (m.id === messageId) {
-            return {
-              ...m,
-              content: '抱歉，重新生成失败，请稍后再试...',
-              timestamp: new Date().toLocaleTimeString()
+        
+        // 实时更新消息内容
+        setMessages(prev => {
+          const updated = [...prev];
+          const msgIndex = updated.findIndex(m => m.id === messageId);
+          if (msgIndex !== -1) {
+            updated[msgIndex] = {
+              ...originalMessage,
+              content: fullText
             };
           }
-          return m;
-        }));
+          return updated;
+        });
+      }
+
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('Error regenerating message:', err);
+        setError('Failed to regenerate message');
+        // 恢复原始消息
+        setMessages(prev => {
+          const updated = [...prev];
+          const msgIndex = updated.findIndex(m => m.id === messageId);
+          if (msgIndex !== -1) {
+            updated[msgIndex] = originalMessage;
+          }
+          return updated;
+        });
       }
     } finally {
       setIsGenerating(false);
@@ -289,6 +301,15 @@ export function ChatComponent() {
     setInput('');
     setIsGenerating(true);
     setError(null);
+
+    // 创建一个带有加载状态的消息
+    setCurrentMessage({
+      id: generateMessageId(),
+      role: 'assistant',
+      content: '',
+      loading: true,
+      timestamp: new Date().toLocaleTimeString()
+    });
 
     // 创建新的 AbortController
     abortControllerRef.current = new AbortController();

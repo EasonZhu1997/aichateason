@@ -51,43 +51,36 @@ export async function POST(req: Request) {
       top_p: 0.95,
     });
 
-    // 创建一个 TransformStream 来处理响应
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-
-    const stream = new TransformStream({
-      async transform(chunk, controller) {
-        const text = decoder.decode(chunk);
-        controller.enqueue(encoder.encode(text));
+    // 创建响应流
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of response) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+              // 确保内容是有效的文本
+              controller.enqueue(new TextEncoder().encode(content));
+            }
+          }
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
       },
     });
 
-    const writer = stream.writable.getWriter();
-    
-    // 处理流式响应
-    for await (const chunk of response) {
-      const text = chunk.choices[0]?.delta?.content || '';
-      writer.write(encoder.encode(text));
-    }
-    writer.close();
-
-    return new Response(stream.readable, {
+    // 返回流式响应
+    return new Response(stream, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
+        'Cache-Control': 'no-cache',
       },
     });
-  } catch (error: any) {
-    console.error('Chat API error:', error);
-    if (error.response) {
-      console.error('Error response:', {
-        status: error.response.status,
-        data: error.response.data,
-        headers: error.response.headers,
-      });
-    }
+
+  } catch (error) {
+    console.error('Chat error:', error);
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

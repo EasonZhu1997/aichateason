@@ -1,4 +1,5 @@
 export type Message = {
+  id: string;
   role: 'system' | 'assistant' | 'user';
   content: string;
   timestamp?: string;
