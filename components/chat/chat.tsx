@@ -247,8 +247,10 @@ export function ChatComponent() {
       for await (const chunk of streamChat(messagesWithSystem, selectedModel, abortControllerRef.current.signal)) {
         if (!abortControllerRef.current) break; // 检查是否已中断
         fullText += chunk;
-        
-        // 实时更新消息内容
+      }
+
+      // 只在生成完成后更新消息内容
+      if (abortControllerRef.current) {
         setMessages(prev => {
           const updated = [...prev];
           const msgIndex = updated.findIndex(m => m.id === messageId);
@@ -283,17 +285,17 @@ export function ChatComponent() {
     }
   };
 
-  // 添加停止生成的处理函数
+  // 修改停止生成的处理函数
   const handleStopGeneration = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
       setIsGenerating(false);
+      setCurrentMessage(null); // 移到外面,确保总是清除
       
-      // 如果是重新生成,则恢复原消息
+      // 如果是重新生成,则清除重新生成状态
       if (regeneratingMessageId) {
         setRegeneratingMessageId(null);
-        setCurrentMessage(null);
       }
     }
   };
