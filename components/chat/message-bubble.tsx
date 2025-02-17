@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Card } from '@/components/ui/card';
 import { Bot, UserCircle, Copy, MessageSquare, RefreshCw, Trash2 } from 'lucide-react';
 import { Message } from '@/services/chat';
+import { select } from 'select';
 
 interface MessageBubbleProps {
   message: Message;
@@ -229,6 +230,14 @@ export function MessageBubble({
     }, 0);
   };
 
+  // 添加选择文本处理函数
+  const handleSelect = () => {
+    const element = bubbleRef.current;
+    if (element) {
+      select(element);
+    }
+  };
+
   // 组件卸载时的清理
   useEffect(() => {
     return () => {
@@ -250,6 +259,7 @@ export function MessageBubble({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onContextMenu={(e) => e.preventDefault()}
+        onDoubleClick={handleSelect}
         className={`relative transition-transform duration-200 ${
           showMenu ? 'scale-[1.02] z-50 overflow-auto max-h-[70vh]' : ''
         } ${isSelectable ? 'selecting' : 'select-none'}`}

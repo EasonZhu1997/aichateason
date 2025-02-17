@@ -33,7 +33,8 @@ const ERROR_MESSAGES = {
 
 export async function POST(req: Request) {
   let controller: AbortController | null = new AbortController();
-  
+  let hasReceivedContent = false;
+
   try {
     const { messages, model } = await req.json();
 
@@ -77,32 +78,52 @@ export async function POST(req: Request) {
 
     clearTimeout(timeoutId);
 
-    // 检查是否收到了任何响应
-    let hasReceivedContent = false;
-
     // 创建响应流
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          // 创建一个标志来跟踪流是否已关闭
+          let isStreamClosed = false;
+
           for await (const chunk of response) {
+            // 检查流是否已关闭
+            if (isStreamClosed) break;
+
             const content = chunk.choices[0]?.delta?.content || '';
             if (content) {
               hasReceivedContent = true;
-              controller.enqueue(new TextEncoder().encode(content));
+              // 添加错误处理
+              try {
+                controller.enqueue(new TextEncoder().encode(content));
+              } catch (error) {
+                console.error('Stream write error:', error);
+                break;
+              }
             }
           }
           
-          // 如果没有收到任何内容,发送友好的错误消息
-          if (!hasReceivedContent) {
-            controller.enqueue(new TextEncoder().encode(ERROR_MESSAGES.noResponse));
+          // 如果没有收到任何内容且流未关闭,发送友好的错误消息
+          if (!hasReceivedContent && !isStreamClosed) {
+            try {
+              controller.enqueue(new TextEncoder().encode(ERROR_MESSAGES.noResponse));
+            } catch (error) {
+              console.error('Error sending no response message:', error);
+            }
           }
           
+          // 标记流已关闭
+          isStreamClosed = true;
           controller.close();
+          
         } catch (error) {
           console.error('Stream error:', error);
-          // 发送友好的错误消息
-          controller.enqueue(new TextEncoder().encode(ERROR_MESSAGES.default));
-          controller.close();
+          // 尝试发送错误消息
+          try {
+            controller.enqueue(new TextEncoder().encode(ERROR_MESSAGES.default));
+            controller.close();
+          } catch (err) {
+            console.error('Error sending error message:', err);
+          }
         }
       },
       cancel() {

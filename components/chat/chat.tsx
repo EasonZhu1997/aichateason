@@ -56,10 +56,12 @@ const MODELS = [
   }
 ] as const;
 
-const SYSTEM_MESSAGE: Message = {
-  role: 'system',
-  content: '你是一个有帮助的AI助理。请始终使用中文回复。保持友好和专业的态度。'
-};
+const SYSTEM_MESSAGE = {
+  id: 'system-message',
+  role: 'system' as const,
+  content: '你是一个有帮助的AI助理。请始终使用中文回复。保持友好和专业的态度。',
+  timestamp: new Date().toLocaleTimeString()
+} satisfies Message;
 
 const WELCOME_MESSAGE: Omit<Message, 'timestamp' | 'id'> = {
   role: 'assistant',
@@ -264,19 +266,21 @@ export function ChatComponent() {
         });
       }
 
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('Error regenerating message:', err);
-        setError('Failed to regenerate message');
-        // 恢复原始消息
-        setMessages(prev => {
-          const updated = [...prev];
-          const msgIndex = updated.findIndex(m => m.id === messageId);
-          if (msgIndex !== -1) {
-            updated[msgIndex] = originalMessage;
-          }
-          return updated;
-        });
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        if (error.name !== 'AbortError') {
+          console.error('Error regenerating message:', error);
+          setError('Failed to regenerate message');
+          // 恢复原始消息
+          setMessages(prev => {
+            const updated = [...prev];
+            const msgIndex = updated.findIndex(m => m.id === messageId);
+            if (msgIndex !== -1) {
+              updated[msgIndex] = originalMessage;
+            }
+            return updated;
+          });
+        }
       }
     } finally {
       setIsGenerating(false);
@@ -345,19 +349,21 @@ export function ChatComponent() {
         typewriterEffect(fullText, newMessages);
       }
 
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        setCurrentMessage(null);
-        setFullResponse('');
-        setMessages([
-          ...newMessages,
-          {
-            id: generateMessageId(),
-            role: 'assistant' as const,
-            content: '抱歉,我现在有点累了,请稍后再试...',
-            timestamp: new Date().toLocaleTimeString()
-          }
-        ]);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        if (error.name !== 'AbortError') {
+          setCurrentMessage(null);
+          setFullResponse('');
+          setMessages([
+            ...newMessages,
+            {
+              id: generateMessageId(),
+              role: 'assistant' as const,
+              content: '抱歉,我现在有点累了,请稍后再试...',
+              timestamp: new Date().toLocaleTimeString()
+            }
+          ]);
+        }
       }
     } finally {
       setIsGenerating(false);
