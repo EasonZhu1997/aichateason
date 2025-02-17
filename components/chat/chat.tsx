@@ -13,6 +13,21 @@ const MODELS = [
     useDeepseekAPI: true
   },
   {
+    id: 'wild-3-5-sonnet-20240620',
+    name: 'Claude Sonnet 20240620（Wild）',
+    useWildAPI: true
+  },
+  {
+    id: 'wild-3-5-sonnet-20241022', 
+    name: 'Claude Sonnet 20241022（Wild）',
+    useWildAPI: true
+  },
+  {
+    id: 'gpt-4o-2024-05-13', 
+    name: 'chatgpt-4o（Wild）',
+    useWildAPI: true
+  },
+  {
     id: 'deepseek-ai/DeepSeek-V3',
     name: '硅基流动-DeepSeek-V3'
   },

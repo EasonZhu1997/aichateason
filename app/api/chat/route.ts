@@ -1,7 +1,7 @@
 import { OpenAI } from 'openai';
 import { NextResponse } from 'next/server';
 
-// 创建三个客户端实例
+// 创建四个客户端实例
 const siliconClient = new OpenAI({
   apiKey: process.env.SILICON_API_KEY,
   baseURL: process.env.SILICON_API_BASE_URL,
@@ -17,6 +17,11 @@ const deepseekClient = new OpenAI({
 
 const openaiClient = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+});
+
+const wildClient = new OpenAI({
+  apiKey: 'sk-fjL382d8c1fdfe3212415a2f0536a2ac2bc7effac09xKhV5',
+  baseURL: 'https://api.gptsapi.net/v1',
 });
 
 // 添加友好的错误消息
@@ -47,6 +52,8 @@ export async function POST(req: Request) {
       client = deepseekClient;
     } else if (model.startsWith('gpt-')) {
       client = openaiClient;
+    } else if (model.startsWith('wild-')) {
+      client = wildClient;
     } else {
       client = siliconClient;
     }
