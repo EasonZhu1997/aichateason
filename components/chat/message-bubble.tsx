@@ -1,15 +1,22 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Card } from '@/components/ui/card';
-import { Bot, UserCircle, Copy, MessageSquare, RefreshCw } from 'lucide-react';
+import { Bot, UserCircle, Copy, MessageSquare, RefreshCw, Trash2 } from 'lucide-react';
 import { Message } from '@/services/chat';
 
 interface MessageBubbleProps {
   message: Message;
   onRegenerate?: () => void;
+  onDelete?: () => void;
+  isRegenerating?: boolean;
 }
 
-export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
+export function MessageBubble({ 
+  message, 
+  onRegenerate, 
+  onDelete,
+  isRegenerating = false 
+}: MessageBubbleProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [isSelectable, setIsSelectable] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
@@ -103,36 +110,119 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
   };
 
   const handleCopy = async () => {
+    if (!message?.content) return;
+    
     try {
-      if (bubbleRef.current) {
-        const textElement = bubbleRef.current.querySelector('p');
-        if (textElement) {
-          await navigator.clipboard.writeText(textElement.textContent || '');
-          setShowMenu(false);
-        }
+      // 检查 Clipboard API 是否可用
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(message.content);
+        setShowMenu(false);
+        return;
       }
+
+      // 降级方案1: execCommand
+      const textarea = document.createElement('textarea');
+      textarea.value = message.content;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '0';
+      textarea.style.top = '0';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          setShowMenu(false);
+          document.body.removeChild(textarea);
+          return;
+        }
+      } catch (e) {
+        console.error('execCommand failed:', e);
+      }
+      document.body.removeChild(textarea);
+
+      // 降级方案2: 选择文本
+      const range = document.createRange();
+      const selection = window.getSelection();
+      
+      // 创建临时容器
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '0';
+      container.style.top = '0';
+      container.style.opacity = '0';
+      container.textContent = message.content;
+      document.body.appendChild(container);
+      
+      range.selectNodeContents(container);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      
+      // 尝试复制选中内容
+      try {
+        document.execCommand('copy');
+        setShowMenu(false);
+      } catch (err) {
+        console.error('Selection copy failed:', err);
+        // 如果都失败了,至少让用户看到文本被选中,可以手动复制
+        container.style.opacity = '1';
+        container.style.background = 'white';
+        container.style.padding = '1rem';
+        container.style.zIndex = '9999';
+        alert('请手动复制选中的文本');
+      }
+      
+      // 清理
+      document.body.removeChild(container);
+      selection?.removeAllRanges();
+
     } catch (err) {
-      console.error('Failed to copy:', err);
+      console.error('Copy failed:', err);
+      alert('复制失败,请手动复制文本');
     }
   };
 
   const handleSelectText = () => {
+    if (!message?.content || !bubbleRef.current) return;
+    
     setIsSelectable(true);
     setShowMenu(false);
     
-    requestAnimationFrame(() => {
-      if (bubbleRef.current) {
-        const textElement = bubbleRef.current.querySelector('p');
-        if (textElement) {
-          const selection = window.getSelection();
-          const range = document.createRange();
-          range.selectNodeContents(textElement);
-          selection?.removeAllRanges();
-          selection?.addRange(range);
-        }
+    // 使用 setTimeout 确保状态更新后再选择文本
+    setTimeout(() => {
+      // 直接找到包含文本内容的 div
+      const textElement = bubbleRef.current?.querySelector('.whitespace-pre-wrap');
+      if (textElement) {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(textElement);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        
+        // 添加高亮样式
+        bubbleRef.current?.classList.add('selecting');
+        
+        // 滚动到选中区域
+        textElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
-    });
+    }, 0);
   };
+
+  // 监听点击事件，处理选择文本后的状态
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (isSelectable && bubbleRef.current && !bubbleRef.current.contains(e.target as Node)) {
+        setIsSelectable(false);
+        setShowMenu(false);
+        bubbleRef.current.classList.remove('selecting');
+      }
+    };
+
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [isSelectable]);
 
   return (
     <div className="relative">
@@ -144,7 +234,7 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
         onContextMenu={(e) => e.preventDefault()}
         className={`relative transition-transform duration-200 ${
           showMenu ? 'scale-[1.02] z-50 overflow-auto max-h-[70vh]' : ''
-        } ${isSelectable ? '' : 'select-none'}`}
+        } ${isSelectable ? 'selecting' : 'select-none'}`}
         style={{
           WebkitTouchCallout: 'none',
           WebkitUserSelect: isSelectable ? 'text' : 'none',
@@ -163,7 +253,14 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
           }`}
         >
           <div className="flex flex-col">
-            <p className="whitespace-pre-wrap">{message.content}</p>
+            {isRegenerating ? (
+              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>正在重新生成...</span>
+              </div>
+            ) : (
+              <p className="whitespace-pre-wrap">{message.content}</p>
+            )}
             <span className={`text-xs mt-2 ${
               message.role === 'user' 
                 ? 'text-blue-100 dark:text-blue-200' 
@@ -182,6 +279,9 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
           onClick={() => {
             setShowMenu(false);
             setIsSelectable(false);
+            if (bubbleRef.current) {
+              bubbleRef.current.classList.remove('selecting');
+            }
           }}
         />
       )}
@@ -198,41 +298,60 @@ export function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
           }}
           className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden 
                      transform transition-transform duration-200 origin-top-left
-                     w-48"
+                     w-48 flex flex-col"
         >
-          <button 
-            onClick={handleCopy}
-            className="flex items-center w-full px-4 py-3 text-sm text-gray-700 dark:text-gray-200 
-                     hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
-            <Copy className="w-4 h-4 mr-3" />
-            复制
-          </button>
-          <div className="h-[1px] bg-gray-200 dark:bg-gray-700" />
-          <button 
-            onClick={handleSelectText}
-            className="flex items-center w-full px-4 py-3 text-sm text-gray-700 dark:text-gray-200 
-                     hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
-            <MessageSquare className="w-4 h-4 mr-3" />
-            选择文本
-          </button>
-          {message.role === 'assistant' && onRegenerate && (
-            <>
-              <div className="h-[1px] bg-gray-200 dark:bg-gray-700" />
-              <button 
-                onClick={() => {
-                  onRegenerate();
+          <div className="flex-1">
+            <button 
+              onClick={handleCopy}
+              className="flex items-center w-full px-4 py-3 text-sm text-gray-700 dark:text-gray-200 
+                       hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <Copy className="w-4 h-4 mr-3" />
+              复制
+            </button>
+            <div className="h-[1px] bg-gray-200 dark:bg-gray-700" />
+            <button 
+              onClick={handleSelectText}
+              className="flex items-center w-full px-4 py-3 text-sm text-gray-700 dark:text-gray-200 
+                       hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <MessageSquare className="w-4 h-4 mr-3" />
+              选择文本
+            </button>
+            {message.role === 'assistant' && onRegenerate && (
+              <>
+                <div className="h-[1px] bg-gray-200 dark:bg-gray-700" />
+                <button 
+                  onClick={() => {
+                    onRegenerate();
+                    setShowMenu(false);
+                  }}
+                  className="flex items-center w-full px-4 py-3 text-sm text-gray-700 dark:text-gray-200 
+                           hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4 mr-3" />
+                  重新生成
+                </button>
+              </>
+            )}
+          </div>
+          
+          {/* 删除按钮固定在底部 */}
+          <div className="border-t border-gray-200 dark:border-gray-700 mt-auto">
+            <button 
+              onClick={() => {
+                if (window.confirm('确定要删除这条消息吗？')) {
+                  onDelete?.();
                   setShowMenu(false);
-                }}
-                className="flex items-center w-full px-4 py-3 text-sm text-gray-700 dark:text-gray-200 
-                         hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <RefreshCw className="w-4 h-4 mr-3" />
-                重新生成
-              </button>
-            </>
-          )}
+                }
+              }}
+              className="flex items-center w-full px-4 py-3 text-sm text-red-600 dark:text-red-400 
+                       hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              <Trash2 className="w-4 h-4 mr-3" />
+              删除
+            </button>
+          </div>
         </div>,
         document.body
       )}

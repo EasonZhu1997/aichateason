@@ -82,6 +82,7 @@ export function ChatComponent() {
   const [currentResponse, setCurrentResponse] = useState<string>('');
   const [fullResponse, setFullResponse] = useState<string>('');
   const [currentMessage, setCurrentMessage] = useState<Message | null>(null);
+  const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingSpeedRef = useRef<ReturnType<typeof setInterval>>(null);
@@ -191,6 +192,36 @@ export function ChatComponent() {
     }, 10);
   };
 
+  // 修改重新生成的处理方式
+  const handleRegenerate = async (messageId: string) => {
+    setMessages(messages.filter(m => m.id !== messageId));
+    setIsLoading(true);
+    
+    try {
+      let fullText = '';
+      const messagesWithSystem = [SYSTEM_MESSAGE, ...messages.filter(m => m.id === messageId)];
+      
+      for await (const chunk of streamChat(messagesWithSystem, selectedModel)) {
+        fullText += chunk;
+        setFullResponse(fullText);
+      }
+      
+      typewriterEffect(fullText, messages.filter(m => m.id === messageId));
+    } catch (err) {
+      setMessages([
+        ...messages.filter(m => m.id !== messageId),
+        {
+          role: 'assistant',
+          content: '抱歉，重新生成失败，请稍后再试...',
+          timestamp: new Date().toLocaleTimeString()
+        }
+      ]);
+    } finally {
+      setIsLoading(false);
+      setRegeneratingMessageId(null);
+    }
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -268,6 +299,11 @@ export function ChatComponent() {
     }
   };
 
+  // 在 ChatComponent 中添加删除消息的处理函数
+  const handleDeleteMessage = (index: number) => {
+    setMessages(messages.filter((_, i) => i !== index));
+  };
+
   if (!mounted) return null;
 
   return (
@@ -328,12 +364,16 @@ export function ChatComponent() {
               <div className={`flex-1 max-w-[80%] ${message.role === 'user' ? 'ml-12' : 'mr-12'}`}>
                 <MessageBubble 
                   message={message}
-                  onRegenerate={message.role === 'assistant' ? () => {
-                    // 重新生成逻辑
-                    const previousMessages = messages.slice(0, i);
-                    setMessages(previousMessages);
-                    handleSubmit(new Event('regenerate') as any);
-                  } : undefined}
+                  onRegenerate={() => {
+                    setRegeneratingMessageId(message.id);
+                    handleRegenerate(message.id);
+                  }}
+                  onDelete={() => {
+                    if (window.confirm('确定要删除这条消息吗？')) {
+                      handleDeleteMessage(i);
+                    }
+                  }}
+                  isRegenerating={regeneratingMessageId === message.id}
                 />
               </div>
               {message.role === 'user' && (
