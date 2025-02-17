@@ -4,6 +4,7 @@ import { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { Message, streamChat } from '@/services/chat';
 import { Card } from '@/components/ui/card';
 import { UserCircle, Bot } from 'lucide-react';
+import { MessageBubble } from './message-bubble';
 
 const MODELS = [
   {
@@ -325,22 +326,15 @@ export function ChatComponent() {
                 </div>
               )}
               <div className={`flex-1 max-w-[80%] ${message.role === 'user' ? 'ml-12' : 'mr-12'}`}>
-                <Card className={`p-4 shadow-sm ${
-                  message.role === 'user' 
-                    ? 'bg-blue-500 text-white dark:bg-blue-600' 
-                    : 'bg-gray-100 dark:bg-gray-700 dark:text-gray-200'
-                }`}>
-                  <div className="flex flex-col">
-                    <p className="whitespace-pre-wrap">{message.content}</p>
-                    <span className={`text-xs mt-2 ${
-                      message.role === 'user' 
-                        ? 'text-blue-100 dark:text-blue-200' 
-                        : 'text-gray-500 dark:text-gray-400'
-                    }`}>
-                      {message.timestamp}
-                    </span>
-                  </div>
-                </Card>
+                <MessageBubble 
+                  message={message}
+                  onRegenerate={message.role === 'assistant' ? () => {
+                    // 重新生成逻辑
+                    const previousMessages = messages.slice(0, i);
+                    setMessages(previousMessages);
+                    handleSubmit(new Event('regenerate') as any);
+                  } : undefined}
+                />
               </div>
               {message.role === 'user' && (
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
