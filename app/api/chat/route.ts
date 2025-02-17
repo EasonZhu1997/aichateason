@@ -16,10 +16,19 @@ const deepseekClient = new OpenAI({
 });
 
 const openaiClient = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // 使用提供的 key
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
+// 添加友好的错误消息
+const ERROR_MESSAGES = {
+  timeout: '抱歉,我现在有点累了,请稍后再试...',
+  noResponse: '抱歉,我好像走神了,能重新问一遍吗?',
+  default: '抱歉,我现在状态不太好,请稍后再试...'
+};
+
 export async function POST(req: Request) {
+  let controller: AbortController | null = new AbortController();
+  
   try {
     const { messages, model } = await req.json();
 
@@ -42,6 +51,13 @@ export async function POST(req: Request) {
       client = siliconClient;
     }
 
+    // 设置30秒超时
+    const timeoutId = setTimeout(() => {
+      if (controller) {
+        controller.abort();
+      }
+    }, 30000);
+
     const response = await client.chat.completions.create({
       model: modelId,
       messages,
@@ -49,7 +65,13 @@ export async function POST(req: Request) {
       temperature: 0.7,
       max_tokens: 2000,
       top_p: 0.95,
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
+
+    // 检查是否收到了任何响应
+    let hasReceivedContent = false;
 
     // 创建响应流
     const stream = new ReadableStream({
@@ -58,15 +80,31 @@ export async function POST(req: Request) {
           for await (const chunk of response) {
             const content = chunk.choices[0]?.delta?.content || '';
             if (content) {
-              // 确保内容是有效的文本
+              hasReceivedContent = true;
               controller.enqueue(new TextEncoder().encode(content));
             }
           }
+          
+          // 如果没有收到任何内容,发送友好的错误消息
+          if (!hasReceivedContent) {
+            controller.enqueue(new TextEncoder().encode(ERROR_MESSAGES.noResponse));
+          }
+          
           controller.close();
         } catch (error) {
-          controller.error(error);
+          console.error('Stream error:', error);
+          // 发送友好的错误消息
+          controller.enqueue(new TextEncoder().encode(ERROR_MESSAGES.default));
+          controller.close();
         }
       },
+      cancel() {
+        // 清理资源
+        if (controller) {
+          controller.abort();
+          controller = null;
+        }
+      }
     });
 
     // 返回流式响应
@@ -79,9 +117,32 @@ export async function POST(req: Request) {
 
   } catch (error) {
     console.error('Chat error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    
+    // 根据错误类型返回不同的友好消息
+    let errorMessage = ERROR_MESSAGES.default;
+    if (error.name === 'AbortError') {
+      errorMessage = ERROR_MESSAGES.timeout;
+    }
+    
+    // 创建一个只包含错误消息的流
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(errorMessage));
+        controller.close();
+      }
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+      },
+    });
+  } finally {
+    // 清理资源
+    if (controller) {
+      controller.abort();
+      controller = null;
+    }
   }
 } 
