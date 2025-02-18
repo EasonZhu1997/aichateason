@@ -25,22 +25,17 @@ const MODELS = [
   {
     id: 'wild-3-5-sonnet-20241022', 
     name: 'Claude Sonnet 20241022（Wild）',
-    useWildAPI: true
+    useWildAPI: true  
   },
   {
-    id: 'gpt-4o-2024-08-06', 
-    name: 'gpt-4o-2024-08-06（Wild）',
-    useWildAPI: true
+    id: 'chatgpt-4o-latest',
+    name: 'ChatGPT-4-Latest（Cursorapi）',
+    useCursorAI: true
   },
   {
-    id: 'chatgpt-4o-latest', 
-    name: 'chatgpt-4o-latest（Wild）',
-    useWildAPI: true
-  },
-  {
-    id: 'o1-preview', 
-    name: 'o1-preview（Wild）',
-    useWildAPI: true
+    id: 'o1-preview',
+    name: 'O1-Preview（Cursorapi）',
+    useCursorAI: true
   },
   {
     id: 'deepseek-ai/DeepSeek-V3',

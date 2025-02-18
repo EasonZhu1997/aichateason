@@ -30,6 +30,12 @@ const grokClient = new OpenAI({
   baseURL: 'https://api.x.ai/v1',
 });
 
+// 修改 cursorai client
+const cursoraiClient = new OpenAI({
+  apiKey: 'sk-9ZnOLUmDfjNb65pQiiJ9lF1fyIAlSzoi8SZbWC37Cyj9bcBG',
+  baseURL: 'https://api.cursorai.art/v1',
+});
+
 // 添加友好的错误消息
 const ERROR_MESSAGES = {
   timeout: '抱歉,我现在有点累了,请稍后再试...',
@@ -63,6 +69,8 @@ export async function POST(req: Request) {
       client = openaiClient;
     } else if (model.startsWith('wild-')) {
       client = wildClient;
+    } else if (['chatgpt-4o-latest', 'o1-preview', 'gemini-2.0-flash'].includes(model)) {
+      client = cursoraiClient;
     } else {
       client = siliconClient;
     }
