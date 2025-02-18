@@ -13,6 +13,11 @@ const MODELS = [
     useDeepseekAPI: true
   },
   {
+    id: 'grok-2-1212',
+    name: 'Grok-2-1212',
+    useGrok: true
+  },
+  {
     id: 'wild-3-5-sonnet-20240620',
     name: 'Claude Sonnet 20240620（Wild）',
     useWildAPI: true
@@ -20,6 +25,21 @@ const MODELS = [
   {
     id: 'wild-3-5-sonnet-20241022', 
     name: 'Claude Sonnet 20241022（Wild）',
+    useWildAPI: true
+  },
+  {
+    id: 'gpt-4o-2024-08-06', 
+    name: 'gpt-4o-2024-08-06（Wild）',
+    useWildAPI: true
+  },
+  {
+    id: 'chatgpt-4o-latest', 
+    name: 'chatgpt-4o-latest（Wild）',
+    useWildAPI: true
+  },
+  {
+    id: 'o1-preview', 
+    name: 'o1-preview（Wild）',
     useWildAPI: true
   },
   {

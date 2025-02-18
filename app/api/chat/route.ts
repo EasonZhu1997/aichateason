@@ -24,6 +24,12 @@ const wildClient = new OpenAI({
   baseURL: 'https://api.gptsapi.net/v1',
 });
 
+// 添加 grok client
+const grokClient = new OpenAI({
+  apiKey: 'xai-zUE6gLv8j4bLf1XPzsIsFlpvmw4WB3gpRl3MDn9HsmIRJDCdl960bogRNcNlZRSjdOTR8kAkPXOpMmdx',
+  baseURL: 'https://api.x.ai/v1',
+});
+
 // 添加友好的错误消息
 const ERROR_MESSAGES = {
   timeout: '抱歉,我现在有点累了,请稍后再试...',
@@ -49,7 +55,9 @@ export async function POST(req: Request) {
     let client;
     let modelId = model;
     
-    if (model === 'deepseek-chat') {
+    if (model.startsWith('grok-')) {
+      client = grokClient;
+    } else if (model === 'deepseek-chat') {
       client = deepseekClient;
     } else if (model.startsWith('gpt-')) {
       client = openaiClient;
