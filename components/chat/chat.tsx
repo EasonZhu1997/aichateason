@@ -13,6 +13,11 @@ const MODELS = [
     useDeepseekAPI: true
   },
   {
+    id: 'deepseek-chat-jaylen',
+    name: 'DeepSeek（杰伦-男朋友）',
+    useDeepseekAPI: true
+  },
+  {
     id: 'grok-2-1212',
     name: 'Grok-2-1212',
     useGrok: true
