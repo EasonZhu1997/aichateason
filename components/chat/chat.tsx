@@ -22,7 +22,7 @@ const SYSTEM_MESSAGE = {
 
 const WELCOME_MESSAGE: Omit<Message, 'timestamp' | 'id'> = {
   role: 'assistant',
-  content: '你好！我是AI助理。我可以帮你回答问题、编写代码、解决问题等。请告诉我你需要什么帮助？'
+  content: '你好！我是${character.name}。我会一直陪伴在你身边,给你温暖和关心。请告诉我你想和我聊些什么？'
 };
 
 // 添加常量定义
@@ -51,8 +51,9 @@ const generateMessageId = () => {
 };
 
 // 创建带id的欢迎消息的辅助函数
-const createWelcomeMessage = () => ({
+const createWelcomeMessage = (character: Character) => ({
   ...WELCOME_MESSAGE,
+  content: `你好！我是${character.name}。我会一直陪伴在你身边,给你温暖和关心。请告诉我你想和我聊些什么？`,
   id: generateMessageId(),
   timestamp: new Date().toLocaleTimeString()
 });
@@ -116,11 +117,11 @@ export function ChatComponent() {
           throw new Error('Invalid stored messages format');
         }
       } else {
-        setMessages([createWelcomeMessage()]);
+        setMessages([createWelcomeMessage(character)]);
       }
     } catch (error) {
       console.error('Failed to load chat history:', error);
-      setMessages([createWelcomeMessage()]);
+      setMessages([createWelcomeMessage(character)]);
     }
   }, []);
 
@@ -400,7 +401,7 @@ ${character.description}
   // 修改清除聊天的函数
   const handleClearChat = () => {
     if (window.confirm('确定要清除所有聊天记录吗？')) {
-      setMessages([createWelcomeMessage()]);
+      setMessages([createWelcomeMessage(character)]);
       setCurrentMessage(null);
       setError(null);
       setStatus('聊天已清除');
