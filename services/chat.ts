@@ -18,28 +18,23 @@ export async function* streamChat(messages: Message[], model: string, signal?: A
     });
 
     if (!response.ok) {
-      throw new Error('Chat request failed');
+      const error = await response.text();
+      throw new Error(`Chat request failed: ${error}`);
     }
 
     const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
+    if (!reader) throw new Error('No reader available');
 
-    while (reader) {
-      if (signal?.aborted) {
-        reader.cancel();
-        break;
-      }
-      
+    const decoder = new TextDecoder();
+    while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      yield decoder.decode(value);
+      
+      const chunk = decoder.decode(value);
+      yield chunk;
     }
   } catch (error) {
-    if (error.name === 'AbortError') {
-      console.log('Request aborted');
-      return;
-    }
-    console.error('Chat error:', error);
+    console.error('Stream chat error:', error);
     throw error;
   }
 } 

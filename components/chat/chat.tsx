@@ -5,7 +5,7 @@ import { Message, streamChat } from '@/services/chat';
 import { Card } from '@/components/ui/card';
 import { UserCircle, Bot } from 'lucide-react';
 import { MessageBubble } from './message-bubble';
-import { CharacterEditor } from './character-editor.tsx';
+import { CharacterEditor } from './character-editor';
 
 const MODELS = [{
   id: 'deepseek-chat',
@@ -58,13 +58,14 @@ const createWelcomeMessage = (character: Character) => ({
   timestamp: new Date().toLocaleTimeString()
 });
 
-// 添加新的类型定义
+// 修改 Character 接口
 interface Character {
   name: string;
   description: string;
+  avatar?: string; // base64格式的图片数据
 }
 
-// 添加默认角色设定
+// 修改默认角色设定
 const DEFAULT_CHARACTER: Character = {
   name: '杰伦',
   description: `- 你是一个体贴温柔的男朋友
@@ -75,7 +76,8 @@ const DEFAULT_CHARACTER: Character = {
 - 你会用亲密的语气和称呼
 - 你会表达强烈的爱意和依恋
 - 你会制造浪漫的氛围
-- 你会让女朋友感受到被爱和被重视`
+- 你会让女朋友感受到被爱和被重视`,
+  avatar: undefined
 };
 
 const CHARACTER_STORAGE_KEY = 'character_settings';
@@ -470,8 +472,12 @@ ${character.description}
               message.role === 'user' ? 'justify-end' : 'justify-start'
             }`}>
               {message.role !== 'user' && (
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center">
-                  <Bot size={20} />
+                <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-blue-500 text-white flex items-center justify-center">
+                  {character.avatar ? (
+                    <img src={character.avatar} alt={character.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Bot size={20} />
+                  )}
                 </div>
               )}
               <div className={`flex-1 max-w-[80%] ${message.role === 'user' ? 'ml-12' : 'mr-12'}`}>
