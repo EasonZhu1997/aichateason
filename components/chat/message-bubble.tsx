@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Card } from '@/components/ui/card';
 import { Bot, UserCircle, Copy, MessageSquare, RefreshCw, Trash2 } from 'lucide-react';
 import { Message } from '@/services/chat';
-import { select } from 'select';
+import select from 'select';
 
 interface MessageBubbleProps {
   message: Message;
@@ -21,7 +21,7 @@ export function MessageBubble({
   const [showMenu, setShowMenu] = useState(false);
   const [isSelectable, setIsSelectable] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);

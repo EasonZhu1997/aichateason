@@ -8,9 +8,6 @@ export type Message = {
 
 export async function* streamChat(messages: Message[], model: string, signal?: AbortSignal) {
   try {
-    // 为Coze API添加特殊处理
-    const isCoze = model === 'coze';
-    
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: {
@@ -21,7 +18,7 @@ export async function* streamChat(messages: Message[], model: string, signal?: A
     });
 
     if (!response.ok) {
-      throw new Error('Chat request failed');
+      throw new Error('聊天请求失败');
     }
 
     const reader = response.body?.getReader();
@@ -37,15 +34,18 @@ export async function* streamChat(messages: Message[], model: string, signal?: A
       if (done) break;
       
       // 解码响应
-      const text = decoder.decode(value);
-      yield text;
+      const text = decoder.decode(value, { stream: true });
+      // 过滤掉JSON格式的控制消息
+      if (!text.includes('"msg_type"') && !text.includes('"finish_reason"')) {
+        yield text;
+      }
     }
   } catch (error) {
     if (error.name === 'AbortError') {
-      console.log('Request aborted');
+      console.log('请求已中止');
       return;
     }
-    console.error('Chat error:', error);
+    console.error('聊天错误:', error);
     throw error;
   }
 } 

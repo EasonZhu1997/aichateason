@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 // 只保留Coze API客户端实现
 const cozeClient = {
   chat: async (messages, signal) => {
     // 将消息转换为Coze API所需的格式
     const additionalMessages = messages
-      .filter(msg => msg.role !== 'system') // 过滤掉系统消息
-      .map(msg => ({
+      .filter((msg: any) => msg.role !== 'system') // 过滤掉系统消息
+      .map((msg: any) => ({
         content_type: "text",
         role: msg.role,
         content: msg.content
@@ -39,13 +39,13 @@ const ERROR_MESSAGES = {
   default: '抱歉,我现在状态不太好,请稍后再试...'
 };
 
-export async function POST(req: Request) {
+export async function POST(request: NextRequest) {
   let controller: AbortController | null = new AbortController();
-  let hasReceivedContent = false;
-
+  const { signal } = controller;
+  
   try {
-    const { messages } = await req.json();
-
+    const { messages, model } = await request.json();
+    
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json(
         { error: 'Invalid messages format' },
@@ -55,43 +55,93 @@ export async function POST(req: Request) {
 
     // 直接使用Coze API
     try {
-      const response = await cozeClient.chat(messages, controller.signal);
+      const response = await cozeClient.chat(messages, signal);
       
-      // 创建响应流
+      // 创建一个可读流来处理响应
+      const reader = response.body?.getReader();
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
+
+      // 创建一个TransformStream来处理数据
       const stream = new ReadableStream({
         async start(controller) {
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          
+          if (!reader) {
+            controller.close();
+            return;
+          }
+
           try {
+            let buffer = '';
+            
             while (true) {
               const { done, value } = await reader.read();
-              if (done) break;
               
-              const chunk = decoder.decode(value, { stream: true });
-              controller.enqueue(new TextEncoder().encode(chunk));
-              hasReceivedContent = true;
+              if (done) {
+                controller.close();
+                break;
+              }
+              
+              // 解码响应
+              const text = decoder.decode(value, { stream: true });
+              buffer += text;
+              
+              // 处理缓冲区中的所有完整事件
+              let processedBuffer = '';
+              const lines = buffer.split('\n');
+              
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // 检查是否是事件行
+                if (line.startsWith('event:')) {
+                  continue;
+                }
+                
+                // 检查是否是数据行
+                if (line.startsWith('data:')) {
+                  try {
+                    // 提取JSON数据
+                    const jsonStr = line.substring(5);
+                    const data = JSON.parse(jsonStr);
+                    
+                    // 只提取content字段，并且过滤掉控制消息
+                    if (data.content && data.type !== "generate_answer_finish" && 
+                        !data.msg_type && data.content_type === "text") {
+                      controller.enqueue(encoder.encode(data.content));
+                    }
+                  } catch (e) {
+                    // 忽略解析错误，继续处理下一行
+                    console.error('解析JSON失败:', e);
+                  }
+                } else if (line !== '') {
+                  // 保留未处理的行到下一次循环
+                  processedBuffer += line + '\n';
+                }
+              }
+              
+              // 更新缓冲区为未处理的内容
+              buffer = processedBuffer;
             }
-            controller.close();
           } catch (error) {
-            console.error('Stream error:', error);
-            controller.enqueue(new TextEncoder().encode(ERROR_MESSAGES.default));
-            controller.close();
+            // 只有在不是AbortError的情况下才报告错误
+            if (error.name !== 'AbortError') {
+              console.error('流处理错误:', error);
+              controller.error(error);
+            }
           }
+        },
+        
+        // 当流被取消时，确保我们也取消底层请求
+        cancel() {
+          reader?.cancel();
         }
       });
-      
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Cache-Control': 'no-cache',
-        },
-      });
+
+      return new NextResponse(stream);
     } catch (error) {
       console.error('Coze API error:', error);
       throw error;
     }
-
   } catch (error) {
     console.error('Chat error:', error);
     
@@ -109,16 +159,10 @@ export async function POST(req: Request) {
       }
     });
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache',
-      },
-    });
+    return new NextResponse(stream);
   } finally {
     // 清理资源
-    if (controller) {
-      controller.abort();
+    if (controller && !signal.aborted) {
       controller = null;
     }
   }
