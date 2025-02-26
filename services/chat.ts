@@ -8,6 +8,9 @@ export type Message = {
 
 export async function* streamChat(messages: Message[], model: string, signal?: AbortSignal) {
   try {
+    // 为Coze API添加特殊处理
+    const isCoze = model === 'coze';
+    
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: {
@@ -32,7 +35,10 @@ export async function* streamChat(messages: Message[], model: string, signal?: A
       
       const { done, value } = await reader.read();
       if (done) break;
-      yield decoder.decode(value);
+      
+      // 解码响应
+      const text = decoder.decode(value);
+      yield text;
     }
   } catch (error) {
     if (error.name === 'AbortError') {

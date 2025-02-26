@@ -8,66 +8,9 @@ import { MessageBubble } from './message-bubble';
 
 const MODELS = [
   {
-    id: 'deepseek-chat',
-    name: '原生-DeepSeek-Chat',
-    useDeepseekAPI: true
-  },
-  {
-    id: 'deepseek-chat-jaylen',
-    name: 'DeepSeek（杰伦-男朋友）',
-    useDeepseekAPI: true
-  },
-  {
-    id: 'grok-2-1212',
-    name: 'Grok-2-1212',
-    useGrok: true
-  },
-  {
-    id: 'wild-3-5-sonnet-20240620',
-    name: 'Claude Sonnet 20240620（Wild）',
-    useWildAPI: true
-  },
-  {
-    id: 'wild-3-5-sonnet-20241022', 
-    name: 'Claude Sonnet 20241022（Wild）',
-    useWildAPI: true  
-  },
-  {
-    id: 'chatgpt-4o-latest',
-    name: 'ChatGPT-4-Latest（Cursorapi）',
-    useCursorAI: true
-  },
-  {
-    id: 'o1-preview',
-    name: 'O1-Preview（Cursorapi）',
-    useCursorAI: true
-  },
-  {
-    id: 'deepseek-ai/DeepSeek-V3',
-    name: '硅基流动-DeepSeek-V3'
-  },
-  {
-    id: 'deepseek-ai/DeepSeek-R1',
-    name: '硅基流动-DeepSeek-R1'
-  },
-  {
-    id: 'Qwen/Qwen2.5-Coder-7B-Instruct',
-    name: '硅基流动-Qwen2.5-Coder'
-  },
-  {
-    id: 'gpt-4-turbo-preview',
-    name: 'GPT-4 Turbo',
-    useOpenAI: true
-  },
-  {
-    id: 'gpt-4',
-    name: 'GPT-4',
-    useOpenAI: true
-  },
-  {
-    id: 'gpt-3.5-turbo',
-    name: 'GPT-3.5 Turbo',
-    useOpenAI: true
+    id: 'coze',
+    name: 'Coze Bot',
+    useCozeAPI: true
   }
 ] as const;
 
@@ -122,7 +65,7 @@ export function ChatComponent() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('');
-  const [selectedModel, setSelectedModel] = useState<string>(MODELS[0].id);
+  const [selectedModel, setSelectedModel] = useState<typeof MODELS[number]['id']>('coze');
   const [currentResponse, setCurrentResponse] = useState<string>('');
   const [fullResponse, setFullResponse] = useState<string>('');
   const [currentMessage, setCurrentMessage] = useState<Message | null>(null);
@@ -419,7 +362,7 @@ export function ChatComponent() {
         <div className="flex items-center gap-4">
           <select
             value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
+            onChange={(e) => setSelectedModel(e.target.value as typeof MODELS[number]['id'])}
             disabled={isGenerating}
             className="w-48 p-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent 
                        bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
