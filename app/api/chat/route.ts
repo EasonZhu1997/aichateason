@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
 
           try {
             let buffer = '';
+            let lastContent = ''; // 用于跟踪上一次发送的内容
             
             while (true) {
               const { done, value } = await reader.read();
@@ -101,17 +102,38 @@ export async function POST(request: NextRequest) {
                 if (line.startsWith('data:')) {
                   try {
                     // 提取JSON数据
-                    const jsonStr = line.substring(5);
-                    const data = JSON.parse(jsonStr);
+                    const jsonStr = line.substring(5).trim();
                     
-                    // 只提取content字段，并且过滤掉控制消息
-                    if (data.content && data.type !== "generate_answer_finish" && 
-                        !data.msg_type && data.content_type === "text") {
-                      controller.enqueue(encoder.encode(data.content));
+                    // 跳过空数据行
+                    if (!jsonStr) continue;
+                    
+                    // 尝试解析JSON
+                    let data;
+                    try {
+                      data = JSON.parse(jsonStr);
+                    } catch (e) {
+                      console.error('JSON解析失败:', jsonStr);
+                      continue;
+                    }
+                    
+                    // 只处理有效的文本内容
+                    if (typeof data.content === 'string' && 
+                        data.role === 'assistant' && 
+                        data.content_type === 'text') {
+                      
+                      // 检查是否与上一次发送的内容相同
+                      if (data.content !== lastContent) {
+                        controller.enqueue(encoder.encode(data.content));
+                        lastContent = data.content; // 更新上一次发送的内容
+                      } else {
+                        console.log('跳过重复内容:', data.content);
+                      }
+                    } else {
+                      // 记录不符合预期的数据格式
+                      console.log('跳过非文本内容:', JSON.stringify(data));
                     }
                   } catch (e) {
-                    // 忽略解析错误，继续处理下一行
-                    console.error('解析JSON失败:', e);
+                    console.error('处理数据行失败:', e);
                   }
                 } else if (line !== '') {
                   // 保留未处理的行到下一次循环

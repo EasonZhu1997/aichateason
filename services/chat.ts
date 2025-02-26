@@ -35,8 +35,14 @@ export async function* streamChat(messages: Message[], model: string, signal?: A
       
       // 解码响应
       const text = decoder.decode(value, { stream: true });
-      // 过滤掉JSON格式的控制消息
-      if (!text.includes('"msg_type"') && !text.includes('"finish_reason"')) {
+
+      // 检查是否是有效的文本内容
+      try {
+        // 尝试解析为JSON，如果成功则说明这是一个对象而不是纯文本
+        JSON.parse(text);
+        console.log('跳过JSON对象:', text);
+      } catch (e) {
+        // 解析失败说明这是纯文本，可以安全地yield
         yield text;
       }
     }
