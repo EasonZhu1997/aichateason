@@ -4,6 +4,12 @@ import { Card } from '@/components/ui/card';
 import { Bot, UserCircle, Copy, MessageSquare, RefreshCw, Trash2, RotateCw } from 'lucide-react';
 import { Message, MessageContent, isContentString } from '@/services/chat';
 import select from 'select';
+// @ts-ignore
+import ReactMarkdown from 'react-markdown';
+// @ts-ignore
+import remarkGfm from 'remark-gfm';
+// @ts-ignore
+import rehypeHighlight from 'rehype-highlight';
 
 interface MessageBubbleProps {
   message: Message;
@@ -12,9 +18,18 @@ interface MessageBubbleProps {
   isRegenerating?: boolean;
 }
 
-// 简化后的文本渲染函数
+// 简化后的文本渲染函数，支持Markdown
 const renderTextContent = (text: string) => {
-  return <p className="whitespace-pre-wrap overflow-x-auto break-words">{text}</p>;
+  return (
+    <div className="whitespace-pre-wrap overflow-x-auto break-words prose dark:prose-invert prose-sm max-w-none">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight]}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
 };
 
 // 辅助函数：渲染消息内容
@@ -141,8 +156,8 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
     } catch (error) {
       console.error('安全渲染失败:', error);
       setRenderError(true);
-      // 渲染失败时显示纯文本
-      return <p className="whitespace-pre-wrap overflow-x-auto break-words">{getTextContent()}</p>;
+      // 渲染失败时依然使用Markdown渲染函数处理纯文本
+      return renderTextContent(getTextContent());
     }
   };
 
@@ -164,7 +179,7 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
             {/* 渲染消息内容 */}
             <div className="w-full overflow-x-auto">
               {renderError ? (
-                <p className="whitespace-pre-wrap overflow-x-auto break-words">{getTextContent()}</p>
+                renderTextContent(getTextContent())
               ) : (
                 safeRenderContent()
               )}

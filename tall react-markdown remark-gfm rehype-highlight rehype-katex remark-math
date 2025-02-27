@@ -1,0 +1,176 @@
+[1mdiff --git a/components/chat/chat.tsx b/components/chat/chat.tsx[m
+[1mindex df870f9..a3005a6 100644[m
+[1m--- a/components/chat/chat.tsx[m
+[1m+++ b/components/chat/chat.tsx[m
+[36m@@ -40,6 +40,32 @@[m [mconst isValidMessageRole = (role: string): role is Message['role'] => {[m
+   return ['assistant', 'system', 'user'].includes(role);[m
+ };[m
+ [m
+[32m+[m[32m// 判断两条消息内容是否相同[m
+[32m+[m[32mconst isSameMessageContent = (content1: string | MessageContent[], content2: string | MessageContent[]): boolean => {[m
+[32m+[m[32m  // 如果两者都是字符串，直接比较[m
+[32m+[m[32m  if (typeof content1 === 'string' && typeof content2 === 'string') {[m
+[32m+[m[32m    return content1 === content2;[m
+[32m+[m[32m  }[m
+[32m+[m[41m  [m
+[32m+[m[32m  // 如果两者都是数组，比较JSON字符串[m
+[32m+[m[32m  if (Array.isArray(content1) && Array.isArray(content2)) {[m
+[32m+[m[32m    return JSON.stringify(content1) === JSON.stringify(content2);[m
+[32m+[m[32m  }[m
+[32m+[m[41m  [m
+[32m+[m[32m  // 一个是字符串，一个是数组，不相同[m
+[32m+[m[32m  return false;[m
+[32m+[m[32m};[m
+[32m+[m
+[32m+[m[32m// 判断两条消息是否相同（基于角色和内容）[m
+[32m+[m[32mconst isSameMessage = (msg1: Message, msg2: Message): boolean => {[m
+[32m+[m[32m  return msg1.role === msg2.role && isSameMessageContent(msg1.content, msg2.content);[m
+[32m+[m[32m};[m
+[32m+[m
+[32m+[m[32m// 检查消息是否已存在于消息数组中[m
+[32m+[m[32mconst messageExistsInArray = (messages: Message[], messageToCheck: Message): boolean => {[m
+[32m+[m[32m  return messages.some(msg => isSameMessage(msg, messageToCheck));[m
+[32m+[m[32m};[m
+[32m+[m
+ // 修改消息验证函数，支持多模态内容[m
+ const isValidMessage = (message: any): message is Message => {[m
+   return ([m
+[36m@@ -197,6 +223,21 @@[m [mexport function ChatComponent() {[m
+ [m
+   // 打字机效果函数[m
+   const typewriterEffect = (text: string, newMessages: Message[]) => {[m
+[32m+[m[32m    // 先检查消息数组中是否已存在相同内容的助手消息[m
+[32m+[m[32m    const assistantMessage = {[m
+[32m+[m[32m      id: generateMessageId(),[m
+[32m+[m[32m      role: 'assistant' as const,[m
+[32m+[m[32m      content: text,[m
+[32m+[m[32m      timestamp: new Date().toLocaleTimeString()[m
+[32m+[m[32m    };[m
+[32m+[m[41m    [m
+[32m+[m[32m    // 如果已存在，直接返回，不执行打字机效果[m
+[32m+[m[32m    if (messageExistsInArray(messages, assistantMessage)) {[m
+[32m+[m[32m      setCurrentMessage(null);[m
+[32m+[m[32m      setCurrentResponse('');[m
+[32m+[m[32m      return;[m
+[32m+[m[32m    }[m
+[32m+[m[41m    [m
+     let index = 0;[m
+     [m
+     if (typingSpeedRef.current) {[m
+[36m@@ -220,21 +261,37 @@[m [mexport function ChatComponent() {[m
+           typingSpeedRef.current = null;[m
+         }[m
+         [m
+[32m+[m[32m        // 使用函数形式的setState确保我们使用最新的messages状态[m
+         setMessages(prevMessages => {[m
+[31m-          // 检查是否已经存在相同内容的消息[m
+[31m-          const isDuplicate = prevMessages.some(m => [m
+[31m-            m.role === 'assistant' && m.content === text[m
+[32m+[m[32m          // 再次检查是否已经有相同内容的消息存在[m
+[32m+[m[32m          // 这是一个安全措施，以防在打字机效果过程中添加了相同的消息[m
+[32m+[m[32m          if (messageExistsInArray(prevMessages, assistantMessage)) {[m
+[32m+[m[32m            // 已经存在相同内容的消息，不添加新消息[m
+[32m+[m[32m            return prevMessages;[m
+[32m+[m[32m          }[m
+[32m+[m
+[32m+[m[32m          // 找到最后一条用户消息[m
+[32m+[m[32m          const lastUserMessage = newMessages[newMessages.length - 1];[m
+[32m+[m[32m          if (!lastUserMessage || lastUserMessage.role !== 'user') {[m
+[32m+[m[32m            // 如果没有用户消息或最后一条不是用户消息，直接返回当前消息列表[m
+[32m+[m[32m            return prevMessages;[m
+[32m+[m[32m          }[m
+[32m+[m
+[32m+[m[32m          const lastUserMessageIndex = prevMessages.findIndex(m =>[m[41m [m
+[32m+[m[32m            m.role === 'user' && m.id === lastUserMessage.id[m
+           );[m
+[31m-          if (isDuplicate) return prevMessages;[m
+[31m-          [m
+[32m+[m
+[32m+[m[32m          // 检查最后一条用户消息后是否已有助手回复[m
+[32m+[m[32m          if (lastUserMessageIndex !== -1 && lastUserMessageIndex < prevMessages.length - 1 &&[m[41m [m
+[32m+[m[32m              prevMessages[lastUserMessageIndex + 1].role === 'assistant') {[m
+[32m+[m[32m            // 已有回复，更新现有消息而不添加新的[m
+[32m+[m[32m            return prevMessages;[m
+[32m+[m[32m          }[m
+[32m+[m
+[32m+[m[32m          // 没有找到重复，添加新的助手消息[m
+           return [[m
+[31m-            ...newMessages,[m
+[31m-            {[m
+[31m-              id: generateMessageId(),[m
+[31m-              role: 'assistant' as const,[m
+[31m-              content: text,[m
+[31m-              timestamp: new Date().toLocaleTimeString()[m
+[31m-            }[m
+[32m+[m[32m            ...prevMessages,[m
+[32m+[m[32m            assistantMessage[m
+           ];[m
+         });[m
+         setCurrentMessage(null);[m
+[36m@@ -425,14 +482,24 @@[m [mexport function ChatComponent() {[m
+       });[m
+     }[m
+ [m
+[32m+[m[32m    // 创建用户消息对象[m
+[32m+[m[32m    const userMessage = {[m
+[32m+[m[32m      id: generateMessageId(),[m
+[32m+[m[32m      role: 'user' as const,[m
+[32m+[m[32m      content: messageContent,[m
+[32m+[m[32m      timestamp: new Date().toLocaleTimeString()[m[41m [m
+[32m+[m[32m    };[m
+[32m+[m
+[32m+[m[32m    // 检查是否重复提交相同的消息内容[m
+[32m+[m[32m    if (messageExistsInArray(messages, userMessage)) {[m
+[32m+[m[32m      setStatus('相同的消息已发送，请不要重复提交');[m
+[32m+[m[32m      setTimeout(() => setStatus(''), 2000);[m
+[32m+[m[32m      return;[m
+[32m+[m[32m    }[m
+[32m+[m
+     const newMessages = [[m
+       ...messages,[m
+[31m-      { [m
+[31m-        id: generateMessageId(),[m
+[31m-        role: 'user' as const,[m
+[31m-        content: messageContent,[m
+[31m-        timestamp: new Date().toLocaleTimeString() [m
+[31m-      }[m
+[32m+[m[32m      userMessage[m
+     ];[m
+     [m
+     setMessages(newMessages);[m
+[36m@@ -457,14 +524,33 @@[m [mexport function ChatComponent() {[m
+       let fullText = '';[m
+       const messagesWithSystem = [SYSTEM_MESSAGE, ...newMessages];[m
+       [m
+[32m+[m[32m      // 创建一个标记变量，用于跟踪是否已经添加了响应[m
+[32m+[m[32m      let responseAdded = false;[m
+[32m+[m[41m      [m
+       for await (const chunk of streamChat(messagesWithSystem, selectedModel, abortControllerRef.current.signal)) {[m
+         if (!abortControllerRef.current) break; // 检查是否已中断[m
+         fullText += chunk;[m
+         setFullResponse(fullText);[m
+       }[m
+ [m
+[31m-      if (abortControllerRef.current) { // 只有在未中断时才更新消息[m
+[31m-        typewriterEffect(fullText, newMessages);[m
+[32m+[m[32m      if (abortControllerRef.current && !responseAdded) { // 只有在未中断且未添加响应时才更新消息[m
+[32m+[m[32m        // 在传递给typewriterEffect前检查是否已存在相同内容的消息[m
+[32m+[m[32m        const assistantMessage = {[m
+[32m+[m[32m          id: generateMessageId(),[m
+[32m+[m[32m          role: 'assistant' as const,[m
+[32m+[m[32m          content: fullText,[m
+[32m+[m[32m          timestamp: new Date().toLocaleTimeString()[m
+[32m+[m[32m        };[m
+[32m+[m[41m        [m
+[32m+[m[32m        const duplicateExists = messageExistsInArray(messages, assistantMessage);[m
+[32m+[m[41m        [m
+[32m+[m[32m        if (!duplicateExists) {[m
+[32m+[m[32m          typewriterEffect(fullText, newMessages);[m
+[32m+[m[32m          responseAdded = true;[m
+[32m+[m[32m        } else {[m
+[32m+[m[32m          setCurrentMessage(null);[m
+[32m+[m[32m          setFullResponse('');[m
+[32m+[m[32m        }[m
+       }[m
+ [m
+     } catch (error: unknown) {[m
