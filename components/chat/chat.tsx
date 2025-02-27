@@ -162,15 +162,23 @@ export function ChatComponent() {
           typingSpeedRef.current = null;
         }
         
-        setMessages([
-          ...newMessages,
-          {
-            id: generateMessageId(), // 添加唯一id
-            role: 'assistant' as const,
-            content: text,
-            timestamp: new Date().toLocaleTimeString()
-          }
-        ]);
+        setMessages(prevMessages => {
+          // 检查是否已经存在相同内容的消息
+          const isDuplicate = prevMessages.some(m => 
+            m.role === 'assistant' && m.content === text
+          );
+          if (isDuplicate) return prevMessages;
+          
+          return [
+            ...newMessages,
+            {
+              id: generateMessageId(),
+              role: 'assistant' as const,
+              content: text,
+              timestamp: new Date().toLocaleTimeString()
+            }
+          ];
+        });
         setCurrentMessage(null);
         setCurrentResponse('');
       }

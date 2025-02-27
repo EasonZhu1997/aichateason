@@ -12,15 +12,24 @@ const cozeClient = {
         content: msg.content
       }));
 
-    const response = await fetch(process.env.BASE_URL, {
+    // 确保环境变量存在
+    const baseUrl = process.env.BASE_URL;
+    const apiKey = process.env.COZE_API_KEY;
+    const botId = process.env.COZE_BOT_ID;
+    
+    if (!baseUrl || !apiKey || !botId) {
+      throw new Error('Missing required environment variables');
+    }
+
+    const response = await fetch(baseUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.COZE_API_KEY}`
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         user_id: "user_" + Date.now(), // 生成一个唯一的用户ID
-        bot_id: process.env.COZE_BOT_ID,
+        bot_id: botId,
         additional_messages: additionalMessages,
         auto_save_history: true,
         stream: true
@@ -52,6 +61,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // 使用一个数据结构记录已处理的内容块
+    const processedChunks = new Set();
 
     // 直接使用Coze API
     try {
@@ -123,7 +135,12 @@ export async function POST(request: NextRequest) {
                       
                       // 检查是否与上一次发送的内容相同
                       if (data.content !== lastContent) {
-                        controller.enqueue(encoder.encode(data.content));
+                        if (!processedChunks.has(data.content)) {
+                          // 过滤掉JSON元数据，只保留纯文本内容
+                          const cleanContent = data.content.replace(/\s*\{\"msg_type\":.*$/g, '');
+                          controller.enqueue(encoder.encode(cleanContent));
+                          processedChunks.add(cleanContent);
+                        }
                         lastContent = data.content; // 更新上一次发送的内容
                       } else {
                         console.log('跳过重复内容:', data.content);
@@ -146,7 +163,7 @@ export async function POST(request: NextRequest) {
             }
           } catch (error) {
             // 只有在不是AbortError的情况下才报告错误
-            if (error.name !== 'AbortError') {
+            if (error instanceof Error && error.name !== 'AbortError') {
               console.error('流处理错误:', error);
               controller.error(error);
             }
@@ -169,7 +186,7 @@ export async function POST(request: NextRequest) {
     
     // 根据错误类型返回不同的友好消息
     let errorMessage = ERROR_MESSAGES.default;
-    if (error.name === 'AbortError') {
+    if (error instanceof Error && error.name === 'AbortError') {
       errorMessage = ERROR_MESSAGES.timeout;
     }
     
