@@ -13,6 +13,7 @@ const globalStyles = `
     max-width: 100%;
     overflow-x: auto;
     margin: 0.5rem 0;
+    padding: 0.25rem 0;
   }
   
   .math-expression::-webkit-scrollbar {
@@ -49,6 +50,18 @@ const globalStyles = `
     overflow-x: auto;
     overflow-y: hidden;
     padding: 0.5rem 0;
+    margin: 0.5rem 0 !important;
+  }
+  
+  .katex-display > .katex {
+    max-width: 100%;
+    white-space: normal;
+  }
+  
+  .katex-display > .katex > .katex-html {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
   
   .katex-display::-webkit-scrollbar {
@@ -61,6 +74,21 @@ const globalStyles = `
   
   .katex-display::-webkit-scrollbar-thumb {
     background: rgba(0, 0, 0, 0.2);
+  }
+  
+  /* 暗色模式下的公式样式 */
+  .dark .katex-display::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  .dark .katex-display::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  
+  /* 提高公式渲染清晰度 */
+  .katex {
+    font-size: 1.1em;
+    line-height: 1.5;
   }
 `;
 

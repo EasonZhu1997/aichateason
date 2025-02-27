@@ -16,113 +16,157 @@ interface MessageBubbleProps {
 
 // 辅助函数：处理数学公式
 const renderMathExpression = (text: string) => {
-  // 更强大的数学公式检测正则表达式
-  const hasMathSyntax = /\\(sin|int|frac|lim|cdots|left|right|sum|prod|to|infty|alpha|beta|theta|pi)|\^\{|\$\$|\$|\{.+?\}|\\|_{|\^{/g.test(text);
+  // 预处理函数：处理一些常见的LaTeX语法问题
+  const preprocessLatex = (latex: string) => {
+    // 修复一些常见的语法问题
+    return latex
+      // 添加缺失的右括号（如果可能）
+      .replace(/\\left([{[(])/g, (match, p1) => `\\left${p1}`)
+      .replace(/\\right([})\]])/g, (match, p1) => `\\right${p1}`)
+      // 替换一些特殊字符
+      .replace(/\\cdots/g, '\\ldots');
+  };
+
+  // 只检查明确的数学公式标记
+  const definiteFormulaPattern = /\$\$(.*?)\$\$|\\\[(.*?)\\\]|\\\((.*?)\\\)/g;
+  const hasDefiniteFormula = definiteFormulaPattern.test(text);
   
-  if (hasMathSyntax) {
-    try {
-      // 处理LaTeX格式，如果文本中包含$$包裹的内容，提取它们
-      if (text.includes('$$')) {
-        // 使用不带s标志的分割方法
-        const segments = [];
-        let currentPos = 0;
-        let startPos, endPos;
+  // 更宽松的模式，用于捕获可能的数学符号
+  const potentialMathPattern = /\\(sin|int|frac|lim|sum|prod|cdots|alpha|beta|theta|pi|left|right)|\^{|_{/g;
+  const mightHaveMath = potentialMathPattern.test(text);
+
+  if (hasDefiniteFormula || mightHaveMath) {
+    // 如果文本包含$$分隔的公式
+    if (text.includes('$$')) {
+      // 分隔文本和公式部分
+      const segments = [];
+      let currentPos = 0;
+      let startPos, endPos;
+      
+      while (currentPos < text.length) {
+        startPos = text.indexOf('$$', currentPos);
         
-        while (currentPos < text.length) {
-          startPos = text.indexOf('$$', currentPos);
-          
-          if (startPos === -1) {
-            // 没有更多的$$，添加剩余部分
-            segments.push(text.slice(currentPos));
-            break;
-          }
-          
-          // 添加$$前的文本
-          if (startPos > currentPos) {
-            segments.push(text.slice(currentPos, startPos));
-          }
-          
-          // 寻找结束的$$
-          endPos = text.indexOf('$$', startPos + 2);
-          
-          if (endPos === -1) {
-            // 没有匹配的结束$$，添加剩余部分并结束
-            segments.push(text.slice(currentPos));
-            break;
-          }
-          
-          // 添加包含$$的段落
-          segments.push(text.slice(startPos, endPos + 2));
-          currentPos = endPos + 2;
+        if (startPos === -1) {
+          // 没有更多公式，添加剩余文本
+          segments.push({type: 'text', content: text.slice(currentPos)});
+          break;
         }
         
-        return (
-          <div className="math-content">
-            {segments.map((segment, index) => {
-              if (segment.startsWith('$$') && segment.endsWith('$$')) {
-                // 删除$$符号并渲染为数学公式
-                const formula = segment.slice(2, -2);
-                try {
-                  const html = katex.renderToString(formula, {
-                    throwOnError: false,
-                    displayMode: true,
-                    output: 'html',
-                    trust: true,
-                    strict: 'ignore'
-                  });
-                  return <div key={index} dangerouslySetInnerHTML={{ __html: html }} className="math-expression overflow-x-auto" />;
-                } catch (err) {
-                  console.error('KaTeX rendering error:', err);
-                  return <pre key={index} className="text-red-500 overflow-x-auto">{segment}</pre>;
-                }
-              }
-              return <p key={index} className="whitespace-pre-wrap overflow-x-auto break-words">{segment}</p>;
-            })}
-          </div>
-        );
+        // 添加公式前的文本
+        if (startPos > currentPos) {
+          segments.push({type: 'text', content: text.slice(currentPos, startPos)});
+        }
+        
+        // 寻找结束的$$
+        endPos = text.indexOf('$$', startPos + 2);
+        
+        if (endPos === -1) {
+          // 未找到匹配的结束标记，作为普通文本处理
+          segments.push({type: 'text', content: text.slice(currentPos)});
+          break;
+        }
+        
+        // 添加数学公式
+        const formula = text.slice(startPos + 2, endPos);
+        segments.push({type: 'math', content: formula});
+        currentPos = endPos + 2;
       }
       
-      // 尝试直接渲染整个文本
-      const html = katex.renderToString(text, {
-        throwOnError: false, 
-        displayMode: true,
-        output: 'html',
-        trust: true,
-        strict: 'ignore'
-      });
-      return <div dangerouslySetInnerHTML={{ __html: html }} className="math-expression overflow-x-auto" />;
-    } catch (error) {
-      console.error('Math rendering error:', error);
-      
-      // 如果整体渲染失败，尝试行分割渲染
-      try {
-        const lines = text.split('\n');
-        return (
-          <div className="math-content space-y-2">
-            {lines.map((line, idx) => {
-              if (line.trim() === '') return <br key={idx} />;
-              
+      // 渲染分段内容
+      return (
+        <div className="math-content">
+          {segments.map((segment, index) => {
+            if (segment.type === 'math') {
               try {
-                const html = katex.renderToString(line, {
+                // 预处理公式并尝试渲染
+                const processedFormula = preprocessLatex(segment.content);
+                const html = katex.renderToString(processedFormula, {
                   throwOnError: false,
                   displayMode: true,
-                  output: 'html'
+                  output: 'html',
+                  trust: true,
+                  strict: 'ignore',
+                  macros: {
+                    // 添加一些常用宏定义
+                    "\\N": "\\mathbb{N}",
+                    "\\Z": "\\mathbb{Z}",
+                    "\\Q": "\\mathbb{Q}",
+                    "\\R": "\\mathbb{R}",
+                    "\\C": "\\mathbb{C}"
+                  }
                 });
-                return <div key={idx} dangerouslySetInnerHTML={{ __html: html }} className="math-expression overflow-x-auto" />;
-              } catch (lineError) {
-                return <p key={idx} className="whitespace-pre-wrap overflow-x-auto break-words">{line}</p>;
+                return <div key={index} dangerouslySetInnerHTML={{ __html: html }} className="math-expression overflow-x-auto my-2" />;
+              } catch (err) {
+                console.error('KaTeX公式渲染错误:', err);
+                // 渲染失败，以普通文本显示原始公式并添加格式
+                return (
+                  <div key={index} className="bg-gray-100 dark:bg-gray-700 p-2 rounded my-2 overflow-x-auto">
+                    <p className="whitespace-pre-wrap font-mono text-sm">{segment.content}</p>
+                  </div>
+                );
               }
-            })}
-          </div>
-        );
-      } catch (fallbackError) {
-        // 如果行分割渲染也失败，直接显示原始文本
-        return <p className="whitespace-pre-wrap overflow-x-auto break-words">{text}</p>;
-      }
+            } else {
+              // 普通文本
+              return <p key={index} className="whitespace-pre-wrap overflow-x-auto break-words">{segment.content}</p>;
+            }
+          })}
+        </div>
+      );
+    }
+    
+    // 尝试行分割处理，每行单独渲染
+    try {
+      const lines = text.split('\n');
+      return (
+        <div className="math-content space-y-2">
+          {lines.map((line, idx) => {
+            if (line.trim() === '') return <br key={idx} />;
+            
+            // 检查是否含有数学符号
+            if (potentialMathPattern.test(line)) {
+              try {
+                // 预处理并尝试整行渲染为公式
+                const processedLine = preprocessLatex(line);
+                const html = katex.renderToString(processedLine, {
+                  throwOnError: false,
+                  displayMode: true,
+                  output: 'html',
+                  trust: true,
+                  strict: 'ignore',
+                  macros: {
+                    "\\N": "\\mathbb{N}",
+                    "\\Z": "\\mathbb{Z}",
+                    "\\Q": "\\mathbb{Q}",
+                    "\\R": "\\mathbb{R}",
+                    "\\C": "\\mathbb{C}"
+                  }
+                });
+                return <div key={idx} dangerouslySetInnerHTML={{ __html: html }} className="math-expression overflow-x-auto my-1" />;
+              } catch (lineError) {
+                // 整行渲染失败，尝试识别行内的公式部分
+                console.log('行公式渲染失败:', lineError);
+                // 当渲染失败时，返回格式化的文本而不是错误显示
+                return (
+                  <p key={idx} className="whitespace-pre-wrap overflow-x-auto break-words">
+                    {line}
+                  </p>
+                );
+              }
+            } else {
+              // 没有数学符号的行直接显示
+              return <p key={idx} className="whitespace-pre-wrap overflow-x-auto break-words">{line}</p>;
+            }
+          })}
+        </div>
+      );
+    } catch (error) {
+      console.error('数学内容处理错误:', error);
+      // 所有尝试都失败时，显示原始文本
+      return <p className="whitespace-pre-wrap overflow-x-auto break-words">{text}</p>;
     }
   }
   
-  // 如果没有识别为数学公式，返回普通文本
+  // 没有数学公式，显示为普通文本
   return <p className="whitespace-pre-wrap overflow-x-auto break-words">{text}</p>;
 };
 
@@ -177,6 +221,7 @@ const renderMessageContent = (content: string | MessageContent[]) => {
 
 export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating }: MessageBubbleProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const [renderError, setRenderError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const isAssistant = message.role === 'assistant';
@@ -200,6 +245,16 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
     
     return '';
   };
+  
+  // 当渲染错误时重置错误状态
+  useEffect(() => {
+    if (renderError) {
+      const timer = setTimeout(() => {
+        setRenderError(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [renderError]);
   
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -231,6 +286,18 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
     }
     setShowMenu(false);
   };
+  
+  // 安全渲染函数
+  const safeRenderContent = () => {
+    try {
+      return renderMessageContent(message.content);
+    } catch (error) {
+      console.error('安全渲染失败:', error);
+      setRenderError(true);
+      // 渲染失败时显示纯文本
+      return <p className="whitespace-pre-wrap overflow-x-auto break-words">{getTextContent()}</p>;
+    }
+  };
 
   return (
     <div className="relative" ref={cardRef}>
@@ -249,7 +316,11 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
           <div className="flex flex-col w-full">
             {/* 渲染消息内容 */}
             <div className="w-full overflow-x-auto">
-              {renderMessageContent(message.content)}
+              {renderError ? (
+                <p className="whitespace-pre-wrap overflow-x-auto break-words">{getTextContent()}</p>
+              ) : (
+                safeRenderContent()
+              )}
             </div>
             
             {/* 时间戳和操作按钮 */}
