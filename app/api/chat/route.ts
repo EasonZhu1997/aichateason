@@ -34,7 +34,7 @@ const cozeClient = {
           const hasImage = msg.content.some(item => item.type === 'image');
           
           if (hasImage) {
-            // 创建多模态消息
+            // 创建多模态内容数组
             const items = [];
             
             for (const item of msg.content) {
@@ -48,26 +48,23 @@ const cozeClient = {
                 if (item.fileId) {
                   items.push({
                     type: "image",
-                    image: {
-                      file_id: item.fileId
-                    }
+                    file_id: item.fileId // 直接使用file_id，不是嵌套的image对象
                   });
                 } else if (item.url) {
                   items.push({
                     type: "image",
-                    image: {
-                      url: item.url
-                    }
+                    url: item.url
                   });
                 }
               }
             }
             
-            // 使用特殊格式处理多模态内容
+            // 使用object_string格式处理多模态内容，并将items数组序列化为字符串
             return {
-              content_type: "multimodal",
+              content_type: "object_string",
               role: msg.role,
-              content: items
+              content: JSON.stringify(items),
+              type: "question"
             };
           } else {
             // 如果只有文本，则提取文本内容
@@ -273,9 +270,36 @@ export async function POST(request: NextRequest) {
                       console.log('跳过元数据:', data.content);
                     }
                   }
+                  // 处理object_string类型的内容（多模态）
+                  else if (currentEvent === 'conversation.message.delta' && data.content && data.content_type === 'object_string') {
+                    try {
+                      // 尝试解析JSON字符串
+                      const parsedContent = JSON.parse(data.content);
+                      // 找出所有文本类型的项目
+                      const textItems = Array.isArray(parsedContent) 
+                        ? parsedContent.filter(item => item.type === 'text')
+                        : [];
+                      
+                      // 输出所有文本内容
+                      for (const item of textItems) {
+                        if (item.text) {
+                          console.log('发送多模态文本内容到前端:', item.text);
+                          controller.enqueue(encoder.encode(item.text));
+                        }
+                      }
+                    } catch (error) {
+                      console.error('解析object_string内容失败:', error);
+                      // 如果解析失败，尝试直接发送内容
+                      if (!data.content.includes('"msg_type"') && 
+                          !data.content.includes('"finish_reason"') && 
+                          !data.content.includes('"from_module"')) {
+                        controller.enqueue(encoder.encode(data.content));
+                      }
+                    }
+                  }
                   // 其他事件类型处理
                   else if (data.content_type === 'text' && data.content) {
-                    // 检查是否是元数据JSON字符串
+                   
                     const isMetadata = typeof data.content === 'string' && 
                       (data.content.includes('"msg_type"') || 
                        data.content.includes('"finish_reason"') ||
@@ -290,17 +314,28 @@ export async function POST(request: NextRequest) {
                       console.log('跳过元数据:', data.content);
                     }
                   } 
-                  else if (data.content_type === 'multimodal' && data.content) {
+                  else if ((data.content_type === 'multimodal' || data.content_type === 'object_string') && data.content) {
                     // 处理多模态响应
-                    const textItems = Array.isArray(data.content) 
-                      ? data.content.filter((item: any) => item.type === 'text')
-                      : [];
-                    
-                    for (const item of textItems) {
-                      if (item.text) {
-                        console.log('发送多模态文本内容到前端:', item.text);
-                        controller.enqueue(encoder.encode(item.text));
+                    try {
+                      // 如果是object_string类型，尝试解析JSON
+                      let contentItems = data.content;
+                      if (data.content_type === 'object_string' && typeof data.content === 'string') {
+                        contentItems = JSON.parse(data.content);
                       }
+                      
+                      // 提取所有文本类型的项目
+                      const textItems = Array.isArray(contentItems)
+                        ? contentItems.filter((item: any) => item.type === 'text')
+                        : [];
+                      
+                      for (const item of textItems) {
+                        if (item.text) {
+                          console.log('发送多模态文本内容到前端:', item.text);
+                          controller.enqueue(encoder.encode(item.text));
+                        }
+                      }
+                    } catch (error) {
+                      console.error('处理多模态内容失败:', error);
                     }
                   }
                   // 还处理choices格式（兼容其他格式）
@@ -313,13 +348,26 @@ export async function POST(request: NextRequest) {
                       controller.enqueue(encoder.encode(delta.content));
                     }
                     // 处理多模态响应
-                    else if (delta.content_type === 'multimodal' && delta.content) {
-                      // 提取并发送文本内容
-                      const textItems = delta.content.filter((item: any) => item.type === 'text');
-                      for (const item of textItems) {
-                        if (item.text) {
-                          controller.enqueue(encoder.encode(item.text));
+                    else if ((delta.content_type === 'multimodal' || delta.content_type === 'object_string') && delta.content) {
+                      try {
+                        // 如果是object_string类型，尝试解析JSON
+                        let contentItems = delta.content;
+                        if (delta.content_type === 'object_string' && typeof delta.content === 'string') {
+                          contentItems = JSON.parse(delta.content);
                         }
+                        
+                        // 提取文本内容
+                        const textItems = Array.isArray(contentItems)
+                          ? contentItems.filter((item: any) => item.type === 'text')
+                          : [];
+                          
+                        for (const item of textItems) {
+                          if (item.text) {
+                            controller.enqueue(encoder.encode(item.text));
+                          }
+                        }
+                      } catch (error) {
+                        console.error('处理delta多模态内容失败:', error);
                       }
                     }
                   }
