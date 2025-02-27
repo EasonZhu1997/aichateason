@@ -16,7 +16,7 @@ const cozeClient = {
         // 检查消息内容是否为字符串
         if (typeof msg.content === 'string') {
           return {
-            content_type: "text",
+            type: "text",
             role: msg.role,
             content: msg.content
           };
@@ -34,18 +34,20 @@ const cozeClient = {
                 text: item.text
               });
             } else if (item.type === 'image') {
-              // 检查图片URL是否为data:URL格式
-              if (item.url.startsWith('data:image/')) {
+              // 检查是否包含文件ID（从Coze上传API获取的）
+              if (item.fileId) {
                 contentItems.push({
-                  type: "image_url",
-                  image_url: {
-                    url: item.url
+                  type: "image",
+                  image: {
+                    file_id: item.fileId
                   }
                 });
-              } else {
+              }
+              // 使用URL（如果文件ID不可用）
+              else if (item.url) {
                 contentItems.push({
-                  type: "image_url",
-                  image_url: {
+                  type: "image",
+                  image: {
                     url: item.url
                   }
                 });
@@ -60,7 +62,7 @@ const cozeClient = {
         }
         // 默认文本消息
         return {
-          content_type: "text",
+          type: "text",
           role: msg.role,
           content: String(msg.content)
         };

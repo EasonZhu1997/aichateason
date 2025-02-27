@@ -75,7 +75,7 @@ export function ChatComponent() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingSpeedRef = useRef<ReturnType<typeof setInterval>>(null);
-  const [uploadedImages, setUploadedImages] = useState<Array<{url: string, name: string}>>([]);
+  const [uploadedImages, setUploadedImages] = useState<Array<{url: string, name: string, fileId?: string}>>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -295,7 +295,10 @@ export function ChatComponent() {
     formData.append('file', file);
     
     try {
-      // 使用专门的coze-upload API端点
+      // 显示上传中状态
+      setUploadError('图片上传中，请稍候...');
+      
+      // 使用Coze上传API端点
       const response = await fetch('/api/coze-upload', {
         method: 'POST',
         body: formData,
@@ -308,9 +311,11 @@ export function ChatComponent() {
         return;
       }
       
+      setUploadError(null);
       setUploadedImages(prev => [...prev, {
         url: data.fileUrl,
-        name: data.fileName
+        name: data.fileName,
+        fileId: data.fileId // 保存Coze文件ID
       }]);
     } catch (error) {
       console.error('图片上传错误:', error);
@@ -360,7 +365,8 @@ export function ChatComponent() {
         (messageContent as MessageContent[]).push({
           type: 'image',
           url: img.url,
-          alt: img.name
+          alt: img.name,
+          fileId: img.fileId // 添加文件ID
         });
       });
     }
@@ -551,9 +557,14 @@ export function ChatComponent() {
                       <p className="whitespace-pre-wrap">
                         {typeof currentMessage.content === 'string' 
                           ? currentMessage.content 
-                          : currentMessage.content.map((item, i) => 
-                              item.type === 'text' ? item.text : '[图片]'
-                            ).join(' ')}
+                          : currentMessage.content.map((item, i) => {
+                              if (item.type === 'text') {
+                                return item.text;
+                              } else if (item.type === 'image') {
+                                return '[图片]';
+                              }
+                              return '';
+                            }).join(' ')}
                       </p>
                     )}
                     <span className="text-xs mt-2 text-gray-500 dark:text-gray-400">

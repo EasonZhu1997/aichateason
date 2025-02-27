@@ -1,6 +1,6 @@
 export type MessageContent = 
   | { type: 'text'; text: string }
-  | { type: 'image'; url: string; alt?: string };
+  | { type: 'image'; url: string; alt?: string; fileId?: string };
 
 export type Message = {
   id: string;
