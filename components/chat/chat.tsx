@@ -40,6 +40,32 @@ const isValidMessageRole = (role: string): role is Message['role'] => {
   return ['assistant', 'system', 'user'].includes(role);
 };
 
+// 判断两条消息内容是否相同
+const isSameMessageContent = (content1: string | MessageContent[], content2: string | MessageContent[]): boolean => {
+  // 如果两者都是字符串，直接比较
+  if (typeof content1 === 'string' && typeof content2 === 'string') {
+    return content1 === content2;
+  }
+  
+  // 如果两者都是数组，比较JSON字符串
+  if (Array.isArray(content1) && Array.isArray(content2)) {
+    return JSON.stringify(content1) === JSON.stringify(content2);
+  }
+  
+  // 一个是字符串，一个是数组，不相同
+  return false;
+};
+
+// 判断两条消息是否相同（基于角色和内容）
+const isSameMessage = (msg1: Message, msg2: Message): boolean => {
+  return msg1.role === msg2.role && isSameMessageContent(msg1.content, msg2.content);
+};
+
+// 检查消息是否已存在于消息数组中
+const messageExistsInArray = (messages: Message[], messageToCheck: Message): boolean => {
+  return messages.some(msg => isSameMessage(msg, messageToCheck));
+};
+
 // 修改消息验证函数，支持多模态内容
 const isValidMessage = (message: any): message is Message => {
   return (
@@ -197,6 +223,21 @@ export function ChatComponent() {
 
   // 打字机效果函数
   const typewriterEffect = (text: string, newMessages: Message[]) => {
+    // 先检查消息数组中是否已存在相同内容的助手消息
+    const assistantMessage = {
+      id: generateMessageId(),
+      role: 'assistant' as const,
+      content: text,
+      timestamp: new Date().toLocaleTimeString()
+    };
+    
+    // 如果已存在，直接返回，不执行打字机效果
+    if (messageExistsInArray(messages, assistantMessage)) {
+      setCurrentMessage(null);
+      setCurrentResponse('');
+      return;
+    }
+    
     let index = 0;
     
     if (typingSpeedRef.current) {
@@ -220,21 +261,37 @@ export function ChatComponent() {
           typingSpeedRef.current = null;
         }
         
+        // 使用函数形式的setState确保我们使用最新的messages状态
         setMessages(prevMessages => {
-          // 检查是否已经存在相同内容的消息
-          const isDuplicate = prevMessages.some(m => 
-            m.role === 'assistant' && m.content === text
+          // 再次检查是否已经有相同内容的消息存在
+          // 这是一个安全措施，以防在打字机效果过程中添加了相同的消息
+          if (messageExistsInArray(prevMessages, assistantMessage)) {
+            // 已经存在相同内容的消息，不添加新消息
+            return prevMessages;
+          }
+
+          // 找到最后一条用户消息
+          const lastUserMessage = newMessages[newMessages.length - 1];
+          if (!lastUserMessage || lastUserMessage.role !== 'user') {
+            // 如果没有用户消息或最后一条不是用户消息，直接返回当前消息列表
+            return prevMessages;
+          }
+
+          const lastUserMessageIndex = prevMessages.findIndex(m => 
+            m.role === 'user' && m.id === lastUserMessage.id
           );
-          if (isDuplicate) return prevMessages;
-          
+
+          // 检查最后一条用户消息后是否已有助手回复
+          if (lastUserMessageIndex !== -1 && lastUserMessageIndex < prevMessages.length - 1 && 
+              prevMessages[lastUserMessageIndex + 1].role === 'assistant') {
+            // 已有回复，更新现有消息而不添加新的
+            return prevMessages;
+          }
+
+          // 没有找到重复，添加新的助手消息
           return [
-            ...newMessages,
-            {
-              id: generateMessageId(),
-              role: 'assistant' as const,
-              content: text,
-              timestamp: new Date().toLocaleTimeString()
-            }
+            ...prevMessages,
+            assistantMessage
           ];
         });
         setCurrentMessage(null);
@@ -425,14 +482,24 @@ export function ChatComponent() {
       });
     }
 
+    // 创建用户消息对象
+    const userMessage = {
+      id: generateMessageId(),
+      role: 'user' as const,
+      content: messageContent,
+      timestamp: new Date().toLocaleTimeString() 
+    };
+
+    // 检查是否重复提交相同的消息内容
+    if (messageExistsInArray(messages, userMessage)) {
+      setStatus('相同的消息已发送，请不要重复提交');
+      setTimeout(() => setStatus(''), 2000);
+      return;
+    }
+
     const newMessages = [
       ...messages,
-      { 
-        id: generateMessageId(),
-        role: 'user' as const,
-        content: messageContent,
-        timestamp: new Date().toLocaleTimeString() 
-      }
+      userMessage
     ];
     
     setMessages(newMessages);
@@ -457,14 +524,33 @@ export function ChatComponent() {
       let fullText = '';
       const messagesWithSystem = [SYSTEM_MESSAGE, ...newMessages];
       
+      // 创建一个标记变量，用于跟踪是否已经添加了响应
+      let responseAdded = false;
+      
       for await (const chunk of streamChat(messagesWithSystem, selectedModel, abortControllerRef.current.signal)) {
         if (!abortControllerRef.current) break; // 检查是否已中断
         fullText += chunk;
         setFullResponse(fullText);
       }
 
-      if (abortControllerRef.current) { // 只有在未中断时才更新消息
-        typewriterEffect(fullText, newMessages);
+      if (abortControllerRef.current && !responseAdded) { // 只有在未中断且未添加响应时才更新消息
+        // 在传递给typewriterEffect前检查是否已存在相同内容的消息
+        const assistantMessage = {
+          id: generateMessageId(),
+          role: 'assistant' as const,
+          content: fullText,
+          timestamp: new Date().toLocaleTimeString()
+        };
+        
+        const duplicateExists = messageExistsInArray(messages, assistantMessage);
+        
+        if (!duplicateExists) {
+          typewriterEffect(fullText, newMessages);
+          responseAdded = true;
+        } else {
+          setCurrentMessage(null);
+          setFullResponse('');
+        }
       }
 
     } catch (error: unknown) {

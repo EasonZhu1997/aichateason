@@ -306,13 +306,6 @@ export async function POST(request: NextRequest) {
                        data.content.includes('"from_module"') ||
                        data.content.includes('"FinData"'));
                        
-                    if (!isMetadata) {
-                      // 文本类型内容，直接发送到前端
-                      console.log('发送文本内容到前端:', data.content);
-                      controller.enqueue(encoder.encode(data.content));
-                    } else {
-                      console.log('跳过元数据:', data.content);
-                    }
                   } 
                   else if ((data.content_type === 'multimodal' || data.content_type === 'object_string') && data.content) {
                     // 处理多模态响应
