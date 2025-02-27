@@ -34,6 +34,8 @@ export async function* streamChat(messages: Message[], model: string, signal?: A
       };
     });
 
+    console.log('发送聊天请求:', JSON.stringify(processedMessages));
+
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: {
@@ -44,33 +46,48 @@ export async function* streamChat(messages: Message[], model: string, signal?: A
     });
 
     if (!response.ok) {
-      throw new Error('聊天请求失败');
+      const errorText = await response.text();
+      console.error('聊天请求失败:', response.status, errorText);
+      yield `请求失败，请稍后重试`;
+      throw new Error(`聊天请求失败: ${response.status} ${errorText}`);
     }
+
+    console.log('收到响应, 状态码:', response.status);
 
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
 
-    while (reader) {
+    if (!reader) {
+      const errorMsg = '无法读取响应流';
+      console.error(errorMsg);
+      yield `请求出错，请重试`;
+      throw new Error(errorMsg);
+    }
+
+    let chunkCount = 0;
+    while (true) {
       if (signal?.aborted) {
         reader.cancel();
         break;
       }
       
       const { done, value } = await reader.read();
-      if (done) break;
+      
+      if (done) {
+        break;
+      }
       
       // 解码响应
       const text = decoder.decode(value, { stream: true });
-
-      // 检查文本中是否包含JSON对象格式的内容
-      const jsonPattern = /\{\"msg_type\":.*\}/;
-      const cleanedText = text.replace(jsonPattern, '');
+      chunkCount++;
       
-      // 如果清理后的文本不为空，则返回
-      if (cleanedText.trim()) {
-        yield cleanedText;
+      console.log(`收到第${chunkCount}块数据，长度：${text.length}字节`);
+      
+      // 只输出有实际内容的文本
+      if (text.trim()) {
+        yield text;
       } else {
-        console.log('跳过无效内容', text);
+        console.log('收到空文本块');
       }
     }
   } catch (error: unknown) {

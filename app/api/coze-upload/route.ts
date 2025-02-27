@@ -54,36 +54,63 @@ export async function POST(request: NextRequest) {
     // 创建一个新的FormData对象来发送到Coze API
     const cozeFormData = new FormData();
     cozeFormData.append('file', file);
+    cozeFormData.append('purpose', 'chat');  // 指定上传目的为聊天
 
-    // 调用Coze文件上传API
-    const cozeResponse = await fetch('https://api.coze.cn/v1/files/upload', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: cozeFormData
-    });
+    console.log('开始上传图片到Coze...', file.name, file.type, file.size);
 
-    const cozeData = await cozeResponse.json();
+    try {
+      // 调用Coze文件上传API
+      const cozeResponse = await fetch('https://api.coze.cn/v1/files/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: cozeFormData
+      });
 
-    if (!cozeResponse.ok) {
-      console.error('Coze上传API错误:', cozeData);
-      return NextResponse.json(
-        { error: cozeData.msg || '文件上传到Coze失败' },
-        { status: cozeResponse.status }
-      );
+      if (!cozeResponse.ok) {
+        const errorText = await cozeResponse.text();
+        console.error('Coze上传API错误:', cozeResponse.status, errorText);
+        return NextResponse.json(
+          { error: `上传到Coze失败: ${cozeResponse.status} ${errorText}` },
+          { status: cozeResponse.status }
+        );
+      }
+
+      const cozeData = await cozeResponse.json();
+
+      console.log('Coze上传响应:', JSON.stringify(cozeData));
+
+      if (!cozeData.data || !cozeData.data.id) {
+        console.error('Coze上传API返回无效数据:', cozeData);
+        return NextResponse.json(
+          { error: '文件上传到Coze返回无效数据' },
+          { status: 500 }
+        );
+      }
+
+      // 上传成功，返回文件信息
+      // 我们同时返回Base64数据URL用于前端显示
+      // 和Coze文件ID用于API调用
+      return NextResponse.json({
+        success: true,
+        fileUrl: dataUrl, // 使用数据URL直接在前端显示
+        fileName: file.name,
+        fileType: file.type,
+        fileId: cozeData.data.id // 保存Coze返回的文件ID，用于API调用
+      });
+    } catch (uploadError) {
+      console.error('Coze上传请求失败:', uploadError);
+      
+      // 尝试使用替代方法：如果上传失败，但我们有Base64数据，仍然返回它用于前端显示
+      return NextResponse.json({
+        success: true,
+        fileUrl: dataUrl, // 使用数据URL直接在前端显示
+        fileName: file.name,
+        fileType: file.type,
+        // 没有fileId，前端将使用URL代替
+      });
     }
-
-    // 上传成功，返回文件信息
-    // 我们同时返回Base64数据URL用于前端显示
-    // 和Coze文件ID用于API调用
-    return NextResponse.json({
-      success: true,
-      fileUrl: dataUrl, // 使用数据URL直接在前端显示
-      fileName: file.name,
-      fileType: file.type,
-      fileId: cozeData.data.id // 保存Coze返回的文件ID，用于API调用
-    });
   } catch (error) {
     console.error('Coze图片上传处理错误:', error);
     return NextResponse.json(
