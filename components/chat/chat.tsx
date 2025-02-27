@@ -587,26 +587,48 @@ export function ChatComponent() {
     abortControllerRef.current = new AbortController();
     
     try {
+      // 创建一个带有加载状态的消息，替换现有消息
+      setMessages(prev => {
+        const updated = [...prev];
+        const msgIndex = updated.findIndex(m => m.id === messageId);
+        if (msgIndex !== -1) {
+          updated[msgIndex] = {
+            ...originalMessage,
+            content: '',
+            loading: true
+          };
+        }
+        return updated;
+      });
+
       let fullText = '';
       // 包含系统消息
       const messagesWithSystem = [SYSTEM_MESSAGE, ...previousMessages];
+      
+      // 创建实时响应的消息对象
+      const liveMessage = {
+        ...originalMessage,
+        content: '',
+        loading: true
+      };
       
       // 使用 streamChat 函数
       for await (const chunk of streamChat(messagesWithSystem, selectedModel, abortControllerRef.current.signal)) {
         if (!abortControllerRef.current) break; // 检查是否已中断
         fullText += chunk;
-      }
-
-      // 只在生成完成后更新消息内容
-      if (abortControllerRef.current) {
+        
+        // 实时更新消息内容，模拟打字机效果
+        const updatedMessage = {
+          ...liveMessage,
+          content: fullText,
+          loading: false
+        };
+        
         setMessages(prev => {
           const updated = [...prev];
           const msgIndex = updated.findIndex(m => m.id === messageId);
           if (msgIndex !== -1) {
-            updated[msgIndex] = {
-              ...originalMessage,
-              content: fullText
-            };
+            updated[msgIndex] = updatedMessage;
           }
           return updated;
         });
