@@ -153,6 +153,29 @@ const preprocessMathExpressions = (text: string): string => {
   processedText = processedText.replace(/(\d+)×(\d+)/g, '$1 \\times $2');
   processedText = processedText.replace(/(\d+)\s*×\s*(\d+)/g, '$1 \\times $2');
   processedText = processedText.replace(/(\w+)\s*×\s*(\w+)/g, '$1 \\times $2');
+  // 处理\Times乘法符号，转换为LaTeX的\times
+  processedText = processedText.replace(/\\Times/g, '\\times');
+  // 确保\times被包含在数学环境中
+  processedText = processedText.replace(/(^|[^$])\\times([^$]|$)/g, '$1$\\times$$2');
+  
+  // 处理\times$\frac{}{}$这种情况，将它们合并到一个数学环境中
+  processedText = processedText.replace(/\\times\$\\frac\{([^{}]+)\}\{([^{}]+)\}\$/g, '\\times\\frac{$1}{$2}');
+  
+  // 额外处理公式中同时出现\times和\frac的多种情况
+  // 1. 处理"$\times$\frac{a}{b}$"这种格式
+  processedText = processedText.replace(/\$\\times\$\\frac\{([^{}]+)\}\{([^{}]+)\}\$/g, '$\\times\\frac{$1}{$2}$');
+  
+  // 2. 处理数字后面接\times$\frac的情况
+  processedText = processedText.replace(/(\d+)\s*\$\\times\$\s*\$\\frac\{([^{}]+)\}\{([^{}]+)\}\$/g, '$1 $\\times\\frac{$2}{$3}$');
+  
+  // 3. 处理格式为"...=48\times$\frac{23}{12}$=..."的情况
+  processedText = processedText.replace(/(\d+)\\times\$\\frac\{([^{}]+)\}\{([^{}]+)\}\$/g, '$1 $\\times\\frac{$2}{$3}$');
+  
+  // 4. 精确处理图片中的格式："\\times$\\frac{23}{12}$"
+  processedText = processedText.replace(/\\times\$\\frac\{(\d+)\}\{(\d+)\}\$/g, '$\\times\\frac{$1}{$2}$');
+
+  // 5. 处理多种变体格式
+  processedText = processedText.replace(/(^|[^\$])\\times\$(\\frac\{[^{}]+\}\{[^{}]+\})\$/g, '$1$\\times $2$');
   
   // 处理除法符号 ÷
   processedText = processedText.replace(/(\d+)÷(\d+)/g, '$\\frac{$1}{$2}$');
