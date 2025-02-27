@@ -527,30 +527,50 @@ export function ChatComponent() {
       // 创建一个标记变量，用于跟踪是否已经添加了响应
       let responseAdded = false;
       
+      // 创建实时响应的消息对象
+      const assistantMessageId = generateMessageId();
+      const liveMessage = {
+        id: assistantMessageId,
+        role: 'assistant' as const,
+        content: '',
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      // 首先添加一个空的响应消息，然后在接收数据时实时更新
+      setCurrentMessage(liveMessage);
+      
       for await (const chunk of streamChat(messagesWithSystem, selectedModel, abortControllerRef.current.signal)) {
         if (!abortControllerRef.current) break; // 检查是否已中断
         fullText += chunk;
+        
+        // 实时更新消息内容
+        const updatedMessage = {
+          ...liveMessage,
+          content: fullText
+        };
+        setCurrentMessage(updatedMessage);
         setFullResponse(fullText);
       }
 
       if (abortControllerRef.current && !responseAdded) { // 只有在未中断且未添加响应时才更新消息
-        // 在传递给typewriterEffect前检查是否已存在相同内容的消息
-        const assistantMessage = {
-          id: generateMessageId(),
+        // 检查是否已存在相同内容的消息
+        const finalAssistantMessage = {
+          id: assistantMessageId,
           role: 'assistant' as const,
           content: fullText,
           timestamp: new Date().toLocaleTimeString()
         };
         
-        const duplicateExists = messageExistsInArray(messages, assistantMessage);
+        const duplicateExists = messageExistsInArray(messages, finalAssistantMessage);
         
         if (!duplicateExists) {
-          typewriterEffect(fullText, newMessages);
+          // 直接添加到消息列表，不再使用打字机效果
+          setMessages(prevMessages => [...prevMessages, finalAssistantMessage]);
           responseAdded = true;
-        } else {
-          setCurrentMessage(null);
-          setFullResponse('');
         }
+        
+        setCurrentMessage(null);
+        setFullResponse('');
       }
 
     } catch (error: unknown) {

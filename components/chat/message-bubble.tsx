@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Card } from '@/components/ui/card';
-import { Bot, UserCircle, Copy, MessageSquare, RefreshCw, Trash2, RotateCw } from 'lucide-react';
+import { Bot, UserCircle, Copy, MessageSquare, RefreshCw, Trash2, RotateCw, X } from 'lucide-react';
 import { Message, MessageContent, isContentString } from '@/services/chat';
 import select from 'select';
 // @ts-ignore
@@ -32,58 +32,10 @@ const renderTextContent = (text: string) => {
   );
 };
 
-// 辅助函数：渲染消息内容
-const renderMessageContent = (content: string | MessageContent[]) => {
-  // 如果是字符串，直接显示
-  if (isContentString(content)) {
-    return renderTextContent(content);
-  }
-  
-  // 否则，渲染多模态内容
-  return (
-    <div className="space-y-2">
-      {content.map((item, index) => {
-        if (item.type === 'text') {
-          return <div key={index}>{renderTextContent(item.text)}</div>;
-        } else if (item.type === 'image') {
-          // 处理图片URL已被优化替换的情况
-          if (item.url === '[图片数据已优化存储]') {
-            return (
-              <div key={index} className="my-2">
-                <div className="max-w-full rounded-md max-h-64 bg-gray-200 dark:bg-gray-700 flex items-center justify-center p-4">
-                  <span className="text-gray-500 dark:text-gray-400">
-                    [图片数据已从历史记录中移除]
-                  </span>
-                </div>
-                {item.alt && (
-                  <p className="text-xs text-gray-500 mt-1">{item.alt}</p>
-                )}
-              </div>
-            );
-          }
-          
-          return (
-            <div key={index} className="my-2">
-              <img 
-                src={item.url} 
-                alt={item.alt || '图片'} 
-                className="max-w-full rounded-md max-h-64 object-contain"
-              />
-              {item.alt && (
-                <p className="text-xs text-gray-500 mt-1">{item.alt}</p>
-              )}
-            </div>
-          );
-        }
-        return null;
-      })}
-    </div>
-  );
-};
-
 export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating }: MessageBubbleProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [renderError, setRenderError] = useState(false);
+  const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const isAssistant = message.role === 'assistant';
@@ -106,6 +58,50 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
     }
     
     return '';
+  };
+  
+  // 辅助函数：渲染消息内容
+  const renderMessageContent = (content: string | MessageContent[]) => {
+    // 如果是字符串，直接显示
+    if (isContentString(content)) {
+      return renderTextContent(content);
+    }
+    
+    // 否则，渲染多模态内容
+    return (
+      <div className="space-y-2">
+        {content.map((item, index) => {
+          if (item.type === 'text') {
+            return <div key={index}>{renderTextContent(item.text)}</div>;
+          } else if (item.type === 'image') {
+            // 处理图片URL已被优化替换的情况
+            if (item.url === '[图片数据已优化存储]') {
+              return (
+                <div key={index} className="my-2">
+                  <div className="max-w-full rounded-md max-h-64 bg-gray-200 dark:bg-gray-700 flex items-center justify-center p-4">
+                    <span className="text-gray-500 dark:text-gray-400">
+                      [图片数据已从历史记录中移除]
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+            
+            return (
+              <div key={index} className="my-2">
+                <img 
+                  src={item.url} 
+                  alt={item.alt || '图片'} 
+                  onClick={() => setEnlargedImage(item.url)}
+                  className="max-w-full rounded-md max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                />
+              </div>
+            );
+          }
+          return null;
+        })}
+      </div>
+    );
   };
   
   // 当渲染错误时重置错误状态
@@ -228,6 +224,29 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
           </div>
         </Card>
       </div>
+      
+      {/* 图片放大模态框 */}
+      {enlargedImage && createPortal(
+        <div 
+          className="fixed inset-0 z-50 bg-black bg-opacity-80 flex items-center justify-center p-4"
+          onClick={() => setEnlargedImage(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh]">
+            <button
+              className="absolute top-2 right-2 p-1 rounded-full bg-black bg-opacity-50 text-white hover:bg-opacity-70 transition-opacity"
+              onClick={() => setEnlargedImage(null)}
+            >
+              <X size={24} />
+            </button>
+            <img 
+              src={enlargedImage} 
+              alt="放大图片" 
+              className="max-w-full max-h-[90vh] object-contain"
+            />
+          </div>
+        </div>,
+        document.body
+      )}
       
       {/* 上下文菜单 */}
       {showMenu && isTextOnlyContent && createPortal(
