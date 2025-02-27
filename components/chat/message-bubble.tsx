@@ -26,6 +26,22 @@ const renderMessageContent = (content: string | MessageContent[]) => {
         if (item.type === 'text') {
           return <p key={index} className="whitespace-pre-wrap">{item.text}</p>;
         } else if (item.type === 'image') {
+          // 处理图片URL已被优化替换的情况
+          if (item.url === '[图片数据已优化存储]') {
+            return (
+              <div key={index} className="my-2">
+                <div className="max-w-full rounded-md max-h-64 bg-gray-200 dark:bg-gray-700 flex items-center justify-center p-4">
+                  <span className="text-gray-500 dark:text-gray-400">
+                    [图片数据已从历史记录中移除]
+                  </span>
+                </div>
+                {item.alt && (
+                  <p className="text-xs text-gray-500 mt-1">{item.alt}</p>
+                )}
+              </div>
+            );
+          }
+          
           return (
             <div key={index} className="my-2">
               <img 

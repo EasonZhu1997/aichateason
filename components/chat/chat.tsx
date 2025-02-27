@@ -35,14 +35,16 @@ const isValidMessageRole = (role: string): role is Message['role'] => {
   return ['assistant', 'system', 'user'].includes(role);
 };
 
+// 修改消息验证函数，支持多模态内容
 const isValidMessage = (message: any): message is Message => {
   return (
     typeof message === 'object' &&
     message !== null &&
-    typeof message.content === 'string' &&
+    (typeof message.content === 'string' || Array.isArray(message.content)) &&
     typeof message.role === 'string' &&
     isValidMessageRole(message.role) &&
-    (!message.timestamp || typeof message.timestamp === 'string')
+    (!message.timestamp || typeof message.timestamp === 'string') &&
+    typeof message.id === 'string'
   );
 };
 
@@ -108,7 +110,41 @@ export function ChatComponent() {
       try {
         // 如果消息数量超过限制,只保存最新的消息
         const messagesToStore = messages.slice(-MAX_STORED_MESSAGES);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(messagesToStore));
+        
+        // 优化存储，移除图片的大型数据URL
+        const optimizedMessages = messagesToStore.map(msg => {
+          // 对于字符串内容，直接保留
+          if (typeof msg.content === 'string') {
+            return msg;
+          }
+          
+          // 对于多模态内容，处理图片
+          if (Array.isArray(msg.content)) {
+            return {
+              ...msg,
+              content: msg.content.map(item => {
+                // 如果是图片，只保留必要信息，不保存base64数据
+                if (item.type === 'image') {
+                  return {
+                    type: 'image',
+                    alt: item.alt || '图片',
+                    fileId: item.fileId, // 保留文件ID用于API
+                    // 不保存完整url，只记录这是一个图片
+                    url: item.url && item.url.startsWith('data:') 
+                      ? '[图片数据已优化存储]' 
+                      : item.url
+                  };
+                }
+                return item;
+              })
+            };
+          }
+          
+          return msg;
+        });
+        
+        // 存储优化后的消息
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(optimizedMessages));
         
         // 添加接近限制的提示
         if (messages.length > MAX_STORED_MESSAGES * 0.8 && messages.length <= MAX_STORED_MESSAGES) {
@@ -117,6 +153,20 @@ export function ChatComponent() {
         }
       } catch (error) {
         console.error('Failed to save chat history:', error);
+        // 如果存储失败，尝试清除部分历史记录
+        try {
+          // 保留最近的少量消息
+          const reducedMessages = messages.slice(-10);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(reducedMessages));
+          setStatus('由于存储空间限制，部分历史记录已被清除');
+          setTimeout(() => setStatus(''), 3000);
+        } catch (secondError) {
+          // 如果还是失败，只能清空存储
+          console.error('Failed to save reduced chat history:', secondError);
+          localStorage.removeItem(STORAGE_KEY);
+          setStatus('聊天历史无法保存，已清空存储');
+          setTimeout(() => setStatus(''), 3000);
+        }
       }
     }
   }, [messages]);
