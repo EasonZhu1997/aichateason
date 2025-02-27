@@ -5,9 +5,28 @@ import { Message, MessageContent, isContentString, streamChat } from '@/services
 import { Card } from '@/components/ui/card';
 import { UserCircle, Bot, Upload, X, Image as ImageIcon } from 'lucide-react';
 import { MessageBubble } from './message-bubble';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
+// 添加数学公式支持
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
+import Link from 'next/link';
 
-// 移除KaTeX相关的CSS样式
+// 添加KaTeX相关的CSS样式
 const globalStyles = `
+  /* KaTeX数学公式相关样式 */
+  .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5rem 0;
+  }
+  
+  .katex {
+    font-size: 1.1em;
+  }
+  
   /* 移除了所有与math相关的样式 */
 `;
 
@@ -91,6 +110,211 @@ const createWelcomeMessage = () => ({
   timestamp: new Date().toLocaleTimeString()
 });
 
+// 添加预处理函数，将文本中的各种数学表达式转换为标准LaTeX格式
+const preprocessMathExpressions = (text: string): string => {
+  let processedText = text;
+  
+  // 处理通用的数学符号
+  
+  // 处理分数表示法: (a:b) 或 (a/b)
+  processedText = processedText.replace(/\((\d+):(\d+)\)/g, '$\\frac{$1}{$2}$');
+  processedText = processedText.replace(/\((\d+)\/(\d+)\)/g, '$\\frac{$1}{$2}$');
+  
+  // 处理\frac表达式，确保它们被$包围
+  processedText = processedText.replace(/\(\(\\frac\{([^{}]+)\}\{([^{}]+)\}\)\)/g, '$\\frac{$1}{$2}$');
+  processedText = processedText.replace(/\(\\frac\{([^{}]+)\}\{([^{}]+)\}\)/g, '$\\frac{$1}{$2}$');
+  
+  // 处理已有的\frac表达式，但没有被$包围的情况
+  processedText = processedText.replace(/(^|[^$])\\frac\{([^{}]+)\}\{([^{}]+)\}([^$]|$)/g, (match, before, p1, p2, after) => {
+    // 检查是不是已经被$包围了
+    if (before.endsWith('$') && after.startsWith('$')) {
+      return match; // 已经被包围，保持不变
+    }
+    return `${before}$\\frac{${p1}}{${p2}}$${after}`;
+  });
+  
+  // 处理平方表示法，如 cm^{2} 或 cm^2
+  processedText = processedText.replace(/(\w+)\^{?(\d+)}?/g, (match, base, exponent) => {
+    // 排除已经在数学环境中的情况
+    const prevChar = processedText.charAt(processedText.indexOf(match) - 1);
+    const nextChar = processedText.charAt(processedText.indexOf(match) + match.length);
+    if (prevChar === '$' && nextChar === '$') {
+      return match;
+    }
+    return `$${base}^{${exponent}}$`;
+  });
+
+  // 处理常见的圆周率表示
+  processedText = processedText.replace(/\bpai\b/g, '\\pi');
+  processedText = processedText.replace(/\bpi\b/g, '\\pi');
+  processedText = processedText.replace(/π/g, '\\pi');
+  
+  // 处理乘法符号
+  processedText = processedText.replace(/(\d+)×(\d+)/g, '$1 \\times $2');
+  processedText = processedText.replace(/(\d+)\s*×\s*(\d+)/g, '$1 \\times $2');
+  processedText = processedText.replace(/(\w+)\s*×\s*(\w+)/g, '$1 \\times $2');
+  
+  // 处理除法符号 ÷
+  processedText = processedText.replace(/(\d+)÷(\d+)/g, '$\\frac{$1}{$2}$');
+  
+  // 处理一般的数学表达式，如 a/b
+  processedText = processedText.replace(/(\d+)\/(\d+)(?![^\s.,:;!?)])/g, (match, p1, p2) => {
+    // 检查是否已在数学环境中
+    const index = processedText.indexOf(match);
+    const prevChar = index > 0 ? processedText.charAt(index - 1) : '';
+    const nextChar = index + match.length < processedText.length ? processedText.charAt(index + match.length) : '';
+    
+    if ((prevChar === '$' && nextChar === '$') || 
+        (prevChar === '\\' && match.includes('frac'))) {
+      return match;
+    }
+    return `$\\frac{${p1}}{${p2}}$`;
+  });
+  
+  // 处理括号中的复杂表达式，使用更通用的方式
+  // 原来的正则表达式可能有问题，修改为更安全的版本
+  try {
+    processedText = processedText.replace(/\((\d+[+\-×÷*/][\d+\-×÷*/\s()]+=[^)]+)\)/g, '($1$)');
+  } catch (error) {
+    console.error('处理复杂表达式时出错:', error);
+    // 错误处理时不修改文本
+  }
+  
+  return processedText;
+};
+
+// 简化后的文本渲染函数，支持Markdown和数学公式
+const renderTextContent = (text: string) => {
+  // 预处理文本中的数学表达式
+  const processedText = preprocessMathExpressions(text);
+  
+  return (
+    <div className="markdown-content">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeHighlight, rehypeKatex]}
+      >
+        {processedText}
+      </ReactMarkdown>
+      <style jsx global>{`
+        .markdown-content p {
+          margin: 0 0 0.5rem 0;
+        }
+        .markdown-content p:last-child {
+          margin-bottom: 0;
+        }
+        .markdown-content ul, .markdown-content ol {
+          margin: 0.5rem 0;
+          padding-left: 1.5rem;
+        }
+        .markdown-content li {
+          margin: 0;
+          padding: 0;
+        }
+        .markdown-content li > p {
+          margin: 0;
+        }
+        .markdown-content li + li {
+          margin-top: 0.25rem;
+        }
+        .markdown-content pre {
+          margin: 0.75rem 0;
+          padding: 0.75rem;
+          background-color: #f1f1f1;
+          border-radius: 0.25rem;
+          overflow-x: auto;
+        }
+        .markdown-content code {
+          font-family: monospace;
+          font-size: 0.875rem;
+        }
+        .markdown-content code:not(pre code) {
+          padding: 0.1rem 0.25rem;
+          background-color: #f1f1f1;
+          border-radius: 0.25rem;
+        }
+        .markdown-content blockquote {
+          margin: 0.75rem 0;
+          padding-left: 1rem;
+          border-left: 4px solid #e2e8f0;
+          color: #4a5568;
+        }
+        .markdown-content a {
+          color: #3182ce;
+          text-decoration: none;
+        }
+        .markdown-content a:hover {
+          text-decoration: underline;
+        }
+        .markdown-content img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 0.25rem;
+          cursor: pointer;
+        }
+        .dark .markdown-content pre {
+          background-color: #2d3748;
+        }
+        .dark .markdown-content code:not(pre code) {
+          background-color: #2d3748;
+          color: #e2e8f0;
+        }
+        .dark .markdown-content blockquote {
+          border-color: #4a5568;
+          color: #e2e8f0;
+        }
+        .dark .markdown-content a {
+          color: #63b3ed;
+        }
+        /* 数学公式样式 */
+        .markdown-content .math-inline {
+          padding: 0 0.25rem;
+        }
+        .markdown-content .math-display {
+          margin: 0.5rem 0;
+        }
+      `}</style>
+    </div>
+  );
+};
+
+// 辅助函数：渲染消息内容
+const renderMessageContent = (content: MessageContent[]) => {
+  return (
+    <div className="space-y-2">
+      {content.map((item, index) => {
+        if (item.type === 'text') {
+          return <div key={index}>{renderTextContent(item.text)}</div>;
+        } else if (item.type === 'image') {
+          // 处理图片URL已被优化替换的情况
+          if (item.url === '[图片数据已优化存储]') {
+            return (
+              <div key={index} className="my-2">
+                <div className="max-w-full rounded-md max-h-64 bg-gray-200 dark:bg-gray-700 flex items-center justify-center p-4">
+                  <span className="text-gray-500 dark:text-gray-400">
+                    [图片数据已从历史记录中移除]
+                  </span>
+                </div>
+              </div>
+            );
+          }
+          
+          return (
+            <div key={index} className="my-2">
+              <img 
+                src={item.url} 
+                alt={item.alt || '图片'} 
+                className="max-w-full rounded-md max-h-64 object-contain cursor-pointer"
+              />
+            </div>
+          );
+        }
+        return null;
+      })}
+    </div>
+  );
+};
+
 export function ChatComponent() {
   const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -104,6 +328,7 @@ export function ChatComponent() {
   const [currentMessage, setCurrentMessage] = useState<Message | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const abortControllerRef = useRef<AbortController | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -115,24 +340,41 @@ export function ChatComponent() {
   // 修改初始化逻辑
   useLayoutEffect(() => {
     setMounted(true);
+    setIsInitializing(true);
     
-    try {
-      const storedMessages = localStorage.getItem(STORAGE_KEY);
-      if (storedMessages) {
-        const parsedData = JSON.parse(storedMessages);
-        if (Array.isArray(parsedData)) {
-          const validMessages = parsedData.filter(isValidMessage);
-          setMessages(validMessages);
+    // 创建一个带有加载指示的初始消息
+    setCurrentMessage({
+      id: generateMessageId(),
+      role: 'assistant',
+      content: '',
+      loading: true,
+      timestamp: new Date().toLocaleTimeString()
+    });
+    
+    // 使用setTimeout模拟加载过程，给用户更好的视觉反馈
+    setTimeout(() => {
+      try {
+        const storedMessages = localStorage.getItem(STORAGE_KEY);
+        if (storedMessages) {
+          const parsedData = JSON.parse(storedMessages);
+          if (Array.isArray(parsedData)) {
+            const validMessages = parsedData.filter(isValidMessage);
+            setMessages(validMessages);
+          } else {
+            throw new Error('Invalid stored messages format');
+          }
         } else {
-          throw new Error('Invalid stored messages format');
+          setMessages([createWelcomeMessage()]);
         }
-      } else {
+      } catch (error) {
+        console.error('Failed to load chat history:', error);
         setMessages([createWelcomeMessage()]);
       }
-    } catch (error) {
-      console.error('Failed to load chat history:', error);
-      setMessages([createWelcomeMessage()]);
-    }
+      
+      // 初始化完成，清除加载状态
+      setIsInitializing(false);
+      setCurrentMessage(null);
+    }, 1000); // 设置一个短暂的延迟，确保加载动画可见
   }, []);
 
   // 添加消息变化监听
@@ -533,6 +775,7 @@ export function ChatComponent() {
         id: assistantMessageId,
         role: 'assistant' as const,
         content: '',
+        loading: true,
         timestamp: new Date().toLocaleTimeString()
       };
       
@@ -546,7 +789,8 @@ export function ChatComponent() {
         // 实时更新消息内容
         const updatedMessage = {
           ...liveMessage,
-          content: fullText
+          content: fullText,
+          loading: false
         };
         setCurrentMessage(updatedMessage);
         setFullResponse(fullText);
