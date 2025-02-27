@@ -9,7 +9,7 @@ import { MessageBubble } from './message-bubble';
 const MODELS = [
   {
     id: 'coze',
-    name: 'Coze Bot',
+    name: '分掌门AI答疑老师',
     useCozeAPI: true
   }
 ] as const;
@@ -17,13 +17,13 @@ const MODELS = [
 const SYSTEM_MESSAGE = {
   id: 'system-message',
   role: 'system' as const,
-  content: '你是一个有帮助的AI助理。请始终使用中文回复。保持友好和专业的态度。',
+  content: '你是一个分掌门的AI答疑老师，可以帮助学生回答问题，请始终使用中文回复。保持热心、友好和专业的态度。',
   timestamp: new Date().toLocaleTimeString()
 } satisfies Message;
 
 const WELCOME_MESSAGE: Omit<Message, 'timestamp' | 'id'> = {
   role: 'assistant',
-  content: '你好！我是AI助理。我可以帮你回答问题、编写代码、解决问题等。请告诉我你需要什么帮助？'
+  content: '你好！我是分掌门AI答疑老师。我可以帮你解决问题等。请告诉我你需要什么帮助？'
 };
 
 // 添加常量定义
@@ -340,10 +340,11 @@ export function ChatComponent() {
     }
   };
 
-  // 修改处理提交的函数，确保没有内容时不能发送
+  // 修改处理提交的函数，确保有图片时必须有文本才能发送
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (isGenerating || (!input.trim() && uploadedImages.length === 0)) return;
+    // 修改验证逻辑：无内容时不能发送，或者有图片但无文本时也不能发送
+    if (isGenerating || !input.trim() && uploadedImages.length === 0 || (uploadedImages.length > 0 && !input.trim())) return;
 
     // 准备消息内容
     let messageContent: string | MessageContent[] = input.trim();
@@ -352,13 +353,11 @@ export function ChatComponent() {
     if (uploadedImages.length > 0) {
       messageContent = [] as MessageContent[];
       
-      // 添加文本（如果有）
-      if (input.trim()) {
-        (messageContent as MessageContent[]).push({
-          type: 'text',
-          text: input.trim()
-        });
-      }
+      // 添加文本（一定会有文本，因为我们在验证逻辑中确保了这一点）
+      (messageContent as MessageContent[]).push({
+        type: 'text',
+        text: input.trim()
+      });
       
       // 添加图片
       uploadedImages.forEach(img => {
@@ -668,9 +667,9 @@ export function ChatComponent() {
             ) : (
               <button 
                 type="submit"
-                disabled={!input.trim() && uploadedImages.length === 0}
+                disabled={!input.trim() || (uploadedImages.length > 0 && !input.trim())}
                 className={`px-4 py-3 rounded-lg whitespace-nowrap ${
-                  !input.trim() && uploadedImages.length === 0 
+                  !input.trim() || (uploadedImages.length > 0 && !input.trim())
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500' 
                     : 'bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700'
                 } transition-colors duration-200`}
