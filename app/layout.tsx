@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "分掌门AI答疑老师",
   description: "分掌门AI答疑老师",
+  icons: {
+    icon: '/fzmlogo.png'
+  }
 };
 
 export default function RootLayout({
