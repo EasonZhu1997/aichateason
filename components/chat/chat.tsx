@@ -5,6 +5,64 @@ import { Message, MessageContent, isContentString, streamChat } from '@/services
 import { Card } from '@/components/ui/card';
 import { UserCircle, Bot, Upload, X, Image as ImageIcon } from 'lucide-react';
 import { MessageBubble } from './message-bubble';
+import 'katex/dist/katex.min.css';
+
+// 添加自定义CSS样式
+const globalStyles = `
+  .math-expression {
+    max-width: 100%;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+  }
+  
+  .math-expression::-webkit-scrollbar {
+    height: 4px;
+  }
+  
+  .math-expression::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
+  }
+  
+  .math-expression::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+  }
+  
+  /* Dark mode scrollbar */
+  .dark .math-expression::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  .dark .math-expression::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  
+  /* 优化长公式和内容显示 */
+  .math-content {
+    max-width: 100%;
+    word-break: break-word;
+  }
+  
+  /* 确保数学公式可滚动但不破坏布局 */
+  .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5rem 0;
+  }
+  
+  .katex-display::-webkit-scrollbar {
+    height: 4px;
+  }
+  
+  .katex-display::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+  }
+  
+  .katex-display::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+  }
+`;
 
 const MODELS = [
   {
@@ -511,6 +569,9 @@ export function ChatComponent() {
 
   return (
     <div className="flex flex-col w-full h-screen bg-white dark:bg-gray-800" suppressHydrationWarning>
+      {/* 添加全局样式 */}
+      <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
+      
       {/* 顶部工具栏 */}
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 border-b 
                       dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
@@ -564,7 +625,7 @@ export function ChatComponent() {
                   <Bot size={20} />
                 </div>
               )}
-              <div className={`flex-1 max-w-[80%] ${message.role === 'user' ? 'ml-12' : 'mr-12'}`}>
+              <div className={`flex-1 max-w-[85%] ${message.role === 'user' ? 'ml-12' : 'mr-12'}`}>
                 <MessageBubble 
                   message={message}
                   onRegenerate={() => {
@@ -593,7 +654,7 @@ export function ChatComponent() {
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center">
                 <Bot size={20} />
               </div>
-              <div className="flex-1 max-w-[80%] mr-12">
+              <div className="flex-1 max-w-[85%] mr-12">
                 <Card className="p-4 shadow-sm bg-gray-100 dark:bg-gray-700 dark:text-gray-200">
                   <div className="flex flex-col">
                     {currentMessage.loading ? (
@@ -603,7 +664,7 @@ export function ChatComponent() {
                         <span className="animate-bounce delay-200">•</span>
                       </div>
                     ) : (
-                      <p className="whitespace-pre-wrap">
+                      <div className="whitespace-pre-wrap overflow-x-auto">
                         {typeof currentMessage.content === 'string' 
                           ? currentMessage.content 
                           : currentMessage.content.map((item, i) => {
@@ -614,7 +675,7 @@ export function ChatComponent() {
                               }
                               return '';
                             }).join(' ')}
-                      </p>
+                      </div>
                     )}
                     <span className="text-xs mt-2 text-gray-500 dark:text-gray-400">
                       {currentMessage.timestamp}
