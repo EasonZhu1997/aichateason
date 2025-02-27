@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// 定义消息类型
+type MessageItem = {
+  role: string;
+  content: string | any[];
+};
+
 // 只保留Coze API客户端实现
 const cozeClient = {
-  chat: async (messages, signal) => {
+  chat: async (messages: MessageItem[], signal?: AbortSignal) => {
     // 将消息转换为Coze API所需的格式
     const additionalMessages = messages
-      .filter((msg: any) => msg.role !== 'system') // 过滤掉系统消息
-      .map((msg: any) => {
+      .filter((msg) => msg.role !== 'system') // 过滤掉系统消息
+      .map((msg) => {
         // 检查消息内容是否为字符串
         if (typeof msg.content === 'string') {
           return {
@@ -17,24 +23,39 @@ const cozeClient = {
         } 
         // 如果是数组，处理多模态内容
         else if (Array.isArray(msg.content)) {
-          return {
-            role: msg.role,
-            content: msg.content.map((item: any) => {
-              if (item.type === 'text') {
-                return {
-                  content_type: "text",
-                  content: item.text
-                };
-              } else if (item.type === 'image') {
-                return {
-                  content_type: "image_url",
+          // 创建适合Coze API的内容数组
+          const contentItems = [];
+          
+          // 处理文本和图片内容
+          for (const item of msg.content) {
+            if (item.type === 'text') {
+              contentItems.push({
+                type: "text",
+                text: item.text
+              });
+            } else if (item.type === 'image') {
+              // 检查图片URL是否为data:URL格式
+              if (item.url.startsWith('data:image/')) {
+                contentItems.push({
+                  type: "image_url",
                   image_url: {
                     url: item.url
                   }
-                };
+                });
+              } else {
+                contentItems.push({
+                  type: "image_url",
+                  image_url: {
+                    url: item.url
+                  }
+                });
               }
-              return null;
-            }).filter(Boolean)
+            }
+          }
+          
+          return {
+            role: msg.role,
+            content: contentItems
           };
         }
         // 默认文本消息

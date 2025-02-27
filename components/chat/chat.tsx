@@ -277,6 +277,16 @@ export function ChatComponent() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
+    // 如果已经有图片，显示错误信息
+    if (uploadedImages.length > 0) {
+      setUploadError('每次只能上传一张图片，请先删除已有图片');
+      // 清空文件输入，允许再次上传
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+    
     const file = e.target.files[0];
     setUploadError(null);
     
@@ -285,7 +295,8 @@ export function ChatComponent() {
     formData.append('file', file);
     
     try {
-      const response = await fetch('/api/upload', {
+      // 使用专门的coze-upload API端点
+      const response = await fetch('/api/coze-upload', {
         method: 'POST',
         body: formData,
       });
@@ -324,10 +335,10 @@ export function ChatComponent() {
     }
   };
 
-  // 修改处理提交的函数，支持发送图片
+  // 修改处理提交的函数，确保没有内容时不能发送
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if ((isGenerating) || (!input.trim() && uploadedImages.length === 0)) return;
+    if (isGenerating || (!input.trim() && uploadedImages.length === 0)) return;
 
     // 准备消息内容
     let messageContent: string | MessageContent[] = input.trim();
@@ -537,7 +548,13 @@ export function ChatComponent() {
                         <span className="animate-bounce delay-200">•</span>
                       </div>
                     ) : (
-                      <p className="whitespace-pre-wrap">{currentMessage.content}</p>
+                      <p className="whitespace-pre-wrap">
+                        {typeof currentMessage.content === 'string' 
+                          ? currentMessage.content 
+                          : currentMessage.content.map((item, i) => 
+                              item.type === 'text' ? item.text : '[图片]'
+                            ).join(' ')}
+                      </p>
                     )}
                     <span className="text-xs mt-2 text-gray-500 dark:text-gray-400">
                       {currentMessage.timestamp}
@@ -565,23 +582,28 @@ export function ChatComponent() {
         {/* 上传图片预览区域 */}
         {uploadedImages.length > 0 && (
           <div className="w-full max-w-3xl mx-auto px-4 py-2">
-            <div className="flex flex-wrap gap-2">
-              {uploadedImages.map((img, index) => (
-                <div key={index} className="relative">
-                  <img 
-                    src={img.url} 
-                    alt={img.name} 
-                    className="h-20 w-20 object-cover rounded border border-gray-300 dark:border-gray-600" 
-                  />
-                  <button 
-                    onClick={() => removeImage(index)}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
-                    title="移除图片"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ))}
+            <div className="flex flex-col gap-2">
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                仅允许上传一张图片，发送后可再次上传
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {uploadedImages.map((img, index) => (
+                  <div key={index} className="relative">
+                    <img 
+                      src={img.url} 
+                      alt={img.name} 
+                      className="h-20 w-20 object-cover rounded border border-gray-300 dark:border-gray-600" 
+                    />
+                    <button 
+                      onClick={() => removeImage(index)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
+                      title="移除图片"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -613,9 +635,9 @@ export function ChatComponent() {
               <button
                 type="button"
                 onClick={triggerFileUpload}
-                disabled={isGenerating}
-                className="p-3 text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400"
-                title="上传图片"
+                disabled={isGenerating || uploadedImages.length > 0}
+                className={`p-3 ${uploadedImages.length > 0 ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400'}`}
+                title={uploadedImages.length > 0 ? "已上传图片，请先删除" : "上传图片"}
               >
                 <ImageIcon size={20} />
               </button>
@@ -636,11 +658,11 @@ export function ChatComponent() {
               <button 
                 type="submit"
                 disabled={!input.trim() && uploadedImages.length === 0}
-                className="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 
-                          disabled:opacity-50 disabled:cursor-not-allowed
-                          transition-colors duration-200
-                          dark:bg-blue-600 dark:hover:bg-blue-700
-                          whitespace-nowrap"
+                className={`px-4 py-3 rounded-lg whitespace-nowrap ${
+                  !input.trim() && uploadedImages.length === 0 
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500' 
+                    : 'bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700'
+                } transition-colors duration-200`}
               >
                 发送
               </button>

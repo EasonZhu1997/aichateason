@@ -21,22 +21,16 @@ export async function* streamChat(messages: Message[], model: string, signal?: A
     const processedMessages = messages.map(msg => {
       // 如果content是字符串，直接使用
       if (isContentString(msg.content)) {
-        return msg;
+        return {
+          ...msg,
+          content: msg.content
+        };
       }
       
-      // 如果content是数组，转换为Coze API格式
-      // 这里需要根据Coze API的格式要求调整
+      // 如果content是数组，维持数组格式，以便后端正确处理
       return {
         ...msg,
-        content: msg.content.map(item => {
-          if (item.type === 'text') {
-            return item.text;
-          } else if (item.type === 'image') {
-            // 由于后端处理方式，此处只用字符串显示这是图片
-            return `[图片]`;
-          }
-          return '';
-        }).join(' ')
+        content: msg.content
       };
     });
 
