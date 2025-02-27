@@ -4,8 +4,6 @@ import { Card } from '@/components/ui/card';
 import { Bot, UserCircle, Copy, MessageSquare, RefreshCw, Trash2, RotateCw } from 'lucide-react';
 import { Message, MessageContent, isContentString } from '@/services/chat';
 import select from 'select';
-import 'katex/dist/katex.min.css';
-import katex from 'katex';
 
 interface MessageBubbleProps {
   message: Message;
@@ -14,167 +12,16 @@ interface MessageBubbleProps {
   isRegenerating?: boolean;
 }
 
-// 辅助函数：处理数学公式
-const renderMathExpression = (text: string) => {
-  // 预处理函数：处理一些常见的LaTeX语法问题
-  const preprocessLatex = (latex: string) => {
-    // 修复一些常见的语法问题
-    return latex
-      // 添加缺失的右括号（如果可能）
-      .replace(/\\left([{[(])/g, (match, p1) => `\\left${p1}`)
-      .replace(/\\right([})\]])/g, (match, p1) => `\\right${p1}`)
-      // 替换一些特殊字符
-      .replace(/\\cdots/g, '\\ldots');
-  };
-
-  // 只检查明确的数学公式标记
-  const definiteFormulaPattern = /\$\$(.*?)\$\$|\\\[(.*?)\\\]|\\\((.*?)\\\)/g;
-  const hasDefiniteFormula = definiteFormulaPattern.test(text);
-  
-  // 更宽松的模式，用于捕获可能的数学符号
-  const potentialMathPattern = /\\(sin|int|frac|lim|sum|prod|cdots|alpha|beta|theta|pi|left|right)|\^{|_{/g;
-  const mightHaveMath = potentialMathPattern.test(text);
-
-  if (hasDefiniteFormula || mightHaveMath) {
-    // 如果文本包含$$分隔的公式
-    if (text.includes('$$')) {
-      // 分隔文本和公式部分
-      const segments = [];
-      let currentPos = 0;
-      let startPos, endPos;
-      
-      while (currentPos < text.length) {
-        startPos = text.indexOf('$$', currentPos);
-        
-        if (startPos === -1) {
-          // 没有更多公式，添加剩余文本
-          segments.push({type: 'text', content: text.slice(currentPos)});
-          break;
-        }
-        
-        // 添加公式前的文本
-        if (startPos > currentPos) {
-          segments.push({type: 'text', content: text.slice(currentPos, startPos)});
-        }
-        
-        // 寻找结束的$$
-        endPos = text.indexOf('$$', startPos + 2);
-        
-        if (endPos === -1) {
-          // 未找到匹配的结束标记，作为普通文本处理
-          segments.push({type: 'text', content: text.slice(currentPos)});
-          break;
-        }
-        
-        // 添加数学公式
-        const formula = text.slice(startPos + 2, endPos);
-        segments.push({type: 'math', content: formula});
-        currentPos = endPos + 2;
-      }
-      
-      // 渲染分段内容
-      return (
-        <div className="math-content">
-          {segments.map((segment, index) => {
-            if (segment.type === 'math') {
-              try {
-                // 预处理公式并尝试渲染
-                const processedFormula = preprocessLatex(segment.content);
-                const html = katex.renderToString(processedFormula, {
-                  throwOnError: false,
-                  displayMode: true,
-                  output: 'html',
-                  trust: true,
-                  strict: 'ignore',
-                  macros: {
-                    // 添加一些常用宏定义
-                    "\\N": "\\mathbb{N}",
-                    "\\Z": "\\mathbb{Z}",
-                    "\\Q": "\\mathbb{Q}",
-                    "\\R": "\\mathbb{R}",
-                    "\\C": "\\mathbb{C}"
-                  }
-                });
-                return <div key={index} dangerouslySetInnerHTML={{ __html: html }} className="math-expression overflow-x-auto my-2" />;
-              } catch (err) {
-                console.error('KaTeX公式渲染错误:', err);
-                // 渲染失败，以普通文本显示原始公式并添加格式
-                return (
-                  <div key={index} className="bg-gray-100 dark:bg-gray-700 p-2 rounded my-2 overflow-x-auto">
-                    <p className="whitespace-pre-wrap font-mono text-sm">{segment.content}</p>
-                  </div>
-                );
-              }
-            } else {
-              // 普通文本
-              return <p key={index} className="whitespace-pre-wrap overflow-x-auto break-words">{segment.content}</p>;
-            }
-          })}
-        </div>
-      );
-    }
-    
-    // 尝试行分割处理，每行单独渲染
-    try {
-      const lines = text.split('\n');
-      return (
-        <div className="math-content space-y-2">
-          {lines.map((line, idx) => {
-            if (line.trim() === '') return <br key={idx} />;
-            
-            // 检查是否含有数学符号
-            if (potentialMathPattern.test(line)) {
-              try {
-                // 预处理并尝试整行渲染为公式
-                const processedLine = preprocessLatex(line);
-                const html = katex.renderToString(processedLine, {
-                  throwOnError: false,
-                  displayMode: true,
-                  output: 'html',
-                  trust: true,
-                  strict: 'ignore',
-                  macros: {
-                    "\\N": "\\mathbb{N}",
-                    "\\Z": "\\mathbb{Z}",
-                    "\\Q": "\\mathbb{Q}",
-                    "\\R": "\\mathbb{R}",
-                    "\\C": "\\mathbb{C}"
-                  }
-                });
-                return <div key={idx} dangerouslySetInnerHTML={{ __html: html }} className="math-expression overflow-x-auto my-1" />;
-              } catch (lineError) {
-                // 整行渲染失败，尝试识别行内的公式部分
-                console.log('行公式渲染失败:', lineError);
-                // 当渲染失败时，返回格式化的文本而不是错误显示
-                return (
-                  <p key={idx} className="whitespace-pre-wrap overflow-x-auto break-words">
-                    {line}
-                  </p>
-                );
-              }
-            } else {
-              // 没有数学符号的行直接显示
-              return <p key={idx} className="whitespace-pre-wrap overflow-x-auto break-words">{line}</p>;
-            }
-          })}
-        </div>
-      );
-    } catch (error) {
-      console.error('数学内容处理错误:', error);
-      // 所有尝试都失败时，显示原始文本
-      return <p className="whitespace-pre-wrap overflow-x-auto break-words">{text}</p>;
-    }
-  }
-  
-  // 没有数学公式，显示为普通文本
+// 简化后的文本渲染函数
+const renderTextContent = (text: string) => {
   return <p className="whitespace-pre-wrap overflow-x-auto break-words">{text}</p>;
 };
 
 // 辅助函数：渲染消息内容
 const renderMessageContent = (content: string | MessageContent[]) => {
-  // 如果是字符串，检查是否包含数学公式
+  // 如果是字符串，直接显示
   if (isContentString(content)) {
-    return renderMathExpression(content);
+    return renderTextContent(content);
   }
   
   // 否则，渲染多模态内容
@@ -182,7 +29,7 @@ const renderMessageContent = (content: string | MessageContent[]) => {
     <div className="space-y-2">
       {content.map((item, index) => {
         if (item.type === 'text') {
-          return <div key={index}>{renderMathExpression(item.text)}</div>;
+          return <div key={index}>{renderTextContent(item.text)}</div>;
         } else if (item.type === 'image') {
           // 处理图片URL已被优化替换的情况
           if (item.url === '[图片数据已优化存储]') {

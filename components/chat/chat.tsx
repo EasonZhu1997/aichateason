@@ -5,91 +5,10 @@ import { Message, MessageContent, isContentString, streamChat } from '@/services
 import { Card } from '@/components/ui/card';
 import { UserCircle, Bot, Upload, X, Image as ImageIcon } from 'lucide-react';
 import { MessageBubble } from './message-bubble';
-import 'katex/dist/katex.min.css';
 
-// 添加自定义CSS样式
+// 移除KaTeX相关的CSS样式
 const globalStyles = `
-  .math-expression {
-    max-width: 100%;
-    overflow-x: auto;
-    margin: 0.5rem 0;
-    padding: 0.25rem 0;
-  }
-  
-  .math-expression::-webkit-scrollbar {
-    height: 4px;
-  }
-  
-  .math-expression::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 10px;
-  }
-  
-  .math-expression::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 10px;
-  }
-  
-  /* Dark mode scrollbar */
-  .dark .math-expression::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-  }
-  
-  .dark .math-expression::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-  }
-  
-  /* 优化长公式和内容显示 */
-  .math-content {
-    max-width: 100%;
-    word-break: break-word;
-  }
-  
-  /* 确保数学公式可滚动但不破坏布局 */
-  .katex-display {
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 0.5rem 0;
-    margin: 0.5rem 0 !important;
-  }
-  
-  .katex-display > .katex {
-    max-width: 100%;
-    white-space: normal;
-  }
-  
-  .katex-display > .katex > .katex-html {
-    max-width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-  
-  .katex-display::-webkit-scrollbar {
-    height: 4px;
-  }
-  
-  .katex-display::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.05);
-  }
-  
-  .katex-display::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.2);
-  }
-  
-  /* 暗色模式下的公式样式 */
-  .dark .katex-display::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-  }
-  
-  .dark .katex-display::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-  }
-  
-  /* 提高公式渲染清晰度 */
-  .katex {
-    font-size: 1.1em;
-    line-height: 1.5;
-  }
+  /* 移除了所有与math相关的样式 */
 `;
 
 const MODELS = [
