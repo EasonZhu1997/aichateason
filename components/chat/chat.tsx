@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useRef, useLayoutEffect, useEffect } from 'react';
-import { Message, streamChat } from '@/services/chat';
+import { Message, MessageContent, isContentString, streamChat } from '@/services/chat';
 import { Card } from '@/components/ui/card';
-import { UserCircle, Bot } from 'lucide-react';
+import { UserCircle, Bot, Upload, X, Image as ImageIcon } from 'lucide-react';
 import { MessageBubble } from './message-bubble';
 
 const MODELS = [
@@ -75,6 +75,9 @@ export function ChatComponent() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingSpeedRef = useRef<ReturnType<typeof setInterval>>(null);
+  const [uploadedImages, setUploadedImages] = useState<Array<{url: string, name: string}>>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 修改初始化逻辑
   useLayoutEffect(() => {
@@ -270,22 +273,100 @@ export function ChatComponent() {
     }
   };
 
-  // 修改 handleSubmit 函数
+  // 添加图片上传处理函数
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    
+    const file = e.target.files[0];
+    setUploadError(null);
+    
+    // 创建FormData
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        setUploadError(data.error || '上传失败');
+        return;
+      }
+      
+      setUploadedImages(prev => [...prev, {
+        url: data.fileUrl,
+        name: data.fileName
+      }]);
+    } catch (error) {
+      console.error('图片上传错误:', error);
+      setUploadError('上传失败，请稍后重试');
+    }
+    
+    // 清空文件输入，允许再次上传同一文件
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+  
+  // 移除已上传的图片
+  const removeImage = (index: number) => {
+    setUploadedImages(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  // 触发文件选择
+  const triggerFileUpload = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  // 修改处理提交的函数，支持发送图片
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim() || isGenerating) return;
+    if ((isGenerating) || (!input.trim() && uploadedImages.length === 0)) return;
+
+    // 准备消息内容
+    let messageContent: string | MessageContent[] = input.trim();
+    
+    // 如果有图片，创建多模态内容
+    if (uploadedImages.length > 0) {
+      messageContent = [] as MessageContent[];
+      
+      // 添加文本（如果有）
+      if (input.trim()) {
+        (messageContent as MessageContent[]).push({
+          type: 'text',
+          text: input.trim()
+        });
+      }
+      
+      // 添加图片
+      uploadedImages.forEach(img => {
+        (messageContent as MessageContent[]).push({
+          type: 'image',
+          url: img.url,
+          alt: img.name
+        });
+      });
+    }
 
     const newMessages = [
       ...messages,
       { 
         id: generateMessageId(),
         role: 'user' as const,
-        content: input,
+        content: messageContent,
         timestamp: new Date().toLocaleTimeString() 
       }
     ];
+    
     setMessages(newMessages);
     setInput('');
+    setUploadedImages([]);
     setIsGenerating(true);
     setError(null);
 
@@ -474,19 +555,72 @@ export function ChatComponent() {
 
       {/* 底部区域 - 使用固定定位 */}
       <div className="sticky bottom-0 left-0 right-0 border-t dark:border-gray-700 bg-white dark:bg-gray-800">
+        {/* 上传错误提示 */}
+        {uploadError && (
+          <div className="w-full max-w-3xl mx-auto px-4 py-1">
+            <div className="text-red-500 text-sm">{uploadError}</div>
+          </div>
+        )}
+        
+        {/* 上传图片预览区域 */}
+        {uploadedImages.length > 0 && (
+          <div className="w-full max-w-3xl mx-auto px-4 py-2">
+            <div className="flex flex-wrap gap-2">
+              {uploadedImages.map((img, index) => (
+                <div key={index} className="relative">
+                  <img 
+                    src={img.url} 
+                    alt={img.name} 
+                    className="h-20 w-20 object-cover rounded border border-gray-300 dark:border-gray-600" 
+                  />
+                  <button 
+                    onClick={() => removeImage(index)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
+                    title="移除图片"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
         {/* 输入区域 */}
         <div className="w-full max-w-3xl mx-auto px-4 py-2">
           <form onSubmit={handleSubmit} className="flex gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={isGenerating ? "AI正在思考中..." : "输入消息..."}
-              disabled={isGenerating}
-              className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                         bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200
-                         placeholder-gray-400 dark:placeholder-gray-500"
-            />
+            <div className="flex-1 flex border rounded-lg 
+                          bg-white dark:bg-gray-800 dark:border-gray-600
+                          focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={isGenerating ? "AI正在思考中..." : "输入消息..."}
+                disabled={isGenerating}
+                className="flex-1 p-3 rounded-lg
+                         bg-white dark:bg-gray-800 dark:text-gray-200
+                         placeholder-gray-400 dark:placeholder-gray-500
+                         border-0 focus:ring-0"
+              />
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={triggerFileUpload}
+                disabled={isGenerating}
+                className="p-3 text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400"
+                title="上传图片"
+              >
+                <ImageIcon size={20} />
+              </button>
+            </div>
+            
             {isGenerating ? (
               <button
                 type="button"
@@ -501,7 +635,7 @@ export function ChatComponent() {
             ) : (
               <button 
                 type="submit"
-                disabled={!input.trim()}
+                disabled={!input.trim() && uploadedImages.length === 0}
                 className="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 
                           disabled:opacity-50 disabled:cursor-not-allowed
                           transition-colors duration-200
@@ -513,7 +647,7 @@ export function ChatComponent() {
             )}
           </form>
         </div>
-
+        
         {/* 状态栏 */}
         <div className="w-full max-w-3xl mx-auto px-4">
           <div className="text-center text-xs text-gray-500 dark:text-gray-400 py-1">

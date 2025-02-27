@@ -6,11 +6,44 @@ const cozeClient = {
     // 将消息转换为Coze API所需的格式
     const additionalMessages = messages
       .filter((msg: any) => msg.role !== 'system') // 过滤掉系统消息
-      .map((msg: any) => ({
-        content_type: "text",
-        role: msg.role,
-        content: msg.content
-      }));
+      .map((msg: any) => {
+        // 检查消息内容是否为字符串
+        if (typeof msg.content === 'string') {
+          return {
+            content_type: "text",
+            role: msg.role,
+            content: msg.content
+          };
+        } 
+        // 如果是数组，处理多模态内容
+        else if (Array.isArray(msg.content)) {
+          return {
+            role: msg.role,
+            content: msg.content.map((item: any) => {
+              if (item.type === 'text') {
+                return {
+                  content_type: "text",
+                  content: item.text
+                };
+              } else if (item.type === 'image') {
+                return {
+                  content_type: "image_url",
+                  image_url: {
+                    url: item.url
+                  }
+                };
+              }
+              return null;
+            }).filter(Boolean)
+          };
+        }
+        // 默认文本消息
+        return {
+          content_type: "text",
+          role: msg.role,
+          content: String(msg.content)
+        };
+      });
 
     // 确保环境变量存在
     const baseUrl = process.env.BASE_URL;
@@ -137,7 +170,53 @@ export async function POST(request: NextRequest) {
                       if (data.content !== lastContent) {
                         if (!processedChunks.has(data.content)) {
                           // 过滤掉JSON元数据，只保留纯文本内容
-                          const cleanContent = data.content.replace(/\s*\{\"msg_type\":.*$/g, '');
+                          let cleanContent = data.content.replace(/\s*\{\"msg_type\":.*$/g, '');
+                          
+                          // 检测并去除重复内容
+                          // 重复检测函数
+                          const removeDuplication = (text: string): string => {
+                            // 如果文本长度小于20，不处理
+                            if (text.length < 20) return text;
+                            
+                            // 将文本分成两半
+                            const halfLength = Math.floor(text.length / 2);
+                            const firstHalf = text.substring(0, halfLength);
+                            const secondHalf = text.substring(halfLength);
+                            
+                            // 检查第二半是否与第一半相似
+                            if (firstHalf.length > 20 && secondHalf.length > 20) {
+                              // 计算两半之间的相似度
+                              let similarityScore = 0;
+                              const words1 = firstHalf.split(/\s+/);
+                              const words2 = secondHalf.split(/\s+/);
+                              
+                              // 如果词语数量差异太大，不认为是重复
+                              if (Math.abs(words1.length - words2.length) > words1.length * 0.3) {
+                                return text;
+                              }
+                              
+                              // 计算共同词语数量
+                              const set1 = new Set(words1);
+                              let commonWords = 0;
+                              for (const word of words2) {
+                                if (set1.has(word)) {
+                                  commonWords++;
+                                }
+                              }
+                              
+                              similarityScore = commonWords / Math.min(words1.length, words2.length);
+                              
+                              // 如果相似度超过阈值，只保留第一半
+                              if (similarityScore > 0.5) {
+                                console.log('检测到重复内容，移除第二部分');
+                                return firstHalf;
+                              }
+                            }
+                            
+                            return text;
+                          };
+                          
+                          cleanContent = removeDuplication(cleanContent);
                           controller.enqueue(encoder.encode(cleanContent));
                           processedChunks.add(cleanContent);
                         }
