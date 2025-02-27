@@ -278,6 +278,26 @@ const renderTextContent = (text: string) => {
   );
 };
 
+// 添加图片组件，单独处理图片加载失败
+const ImageComponent = ({ url, alt }: { url: string, alt: string }) => {
+  const [loadFailed, setLoadFailed] = useState(false);
+  
+  return loadFailed ? (
+    <div className="max-w-full rounded-md max-h-64 bg-gray-200 dark:bg-gray-700 flex items-center justify-center p-4">
+      <span className="text-gray-500 dark:text-gray-400">
+        [图片加载失败]
+      </span>
+    </div>
+  ) : (
+    <img 
+      src={url} 
+      alt={alt || '图片'} 
+      className="max-w-full rounded-md max-h-64 object-contain cursor-pointer"
+      onError={() => setLoadFailed(true)}
+    />
+  );
+};
+
 // 辅助函数：渲染消息内容
 const renderMessageContent = (content: MessageContent[]) => {
   return (
@@ -286,26 +306,9 @@ const renderMessageContent = (content: MessageContent[]) => {
         if (item.type === 'text') {
           return <div key={index}>{renderTextContent(item.text)}</div>;
         } else if (item.type === 'image') {
-          // 处理图片URL已被优化替换的情况
-          if (item.url === '[图片数据已优化存储]') {
-            return (
-              <div key={index} className="my-2">
-                <div className="max-w-full rounded-md max-h-64 bg-gray-200 dark:bg-gray-700 flex items-center justify-center p-4">
-                  <span className="text-gray-500 dark:text-gray-400">
-                    [图片数据已从历史记录中移除]
-                  </span>
-                </div>
-              </div>
-            );
-          }
-          
           return (
             <div key={index} className="my-2">
-              <img 
-                src={item.url} 
-                alt={item.alt || '图片'} 
-                className="max-w-full rounded-md max-h-64 object-contain cursor-pointer"
-              />
+              <ImageComponent url={item.url} alt={item.alt || '图片'} />
             </div>
           );
         }
@@ -384,28 +387,26 @@ export function ChatComponent() {
         // 如果消息数量超过限制,只保存最新的消息
         const messagesToStore = messages.slice(-MAX_STORED_MESSAGES);
         
-        // 优化存储，移除图片的大型数据URL
+        // 优化存储，但保留图片URL以便用户回顾
         const optimizedMessages = messagesToStore.map(msg => {
           // 对于字符串内容，直接保留
           if (typeof msg.content === 'string') {
             return msg;
           }
           
-          // 对于多模态内容，处理图片
+          // 对于多模态内容，保留图片URL
           if (Array.isArray(msg.content)) {
             return {
               ...msg,
               content: msg.content.map(item => {
-                // 如果是图片，只保留必要信息，不保存base64数据
+                // 如果是图片，保留URL信息
                 if (item.type === 'image') {
                   return {
                     type: 'image',
                     alt: item.alt || '图片',
                     fileId: item.fileId, // 保留文件ID用于API
-                    // 不保存完整url，只记录这是一个图片
-                    url: item.url && item.url.startsWith('data:') 
-                      ? '[图片数据已优化存储]' 
-                      : item.url
+                    // 保留URL
+                    url: item.url
                   };
                 }
                 return item;

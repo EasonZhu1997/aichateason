@@ -20,73 +20,83 @@ const cozeClient = {
     const additionalMessages = messages
       .filter((msg) => msg.role !== 'system') // 过滤掉系统消息
       .map((msg) => {
-        // 检查消息内容是否为字符串
-        if (typeof msg.content === 'string') {
-          return {
-            content_type: "text",
-            role: msg.role,
-            content: msg.content
-          };
-        } 
-        // 如果是数组，处理多模态内容
-        else if (Array.isArray(msg.content)) {
-          // 处理包含图片的消息
-          const hasImage = msg.content.some(item => item.type === 'image');
-          
-          if (hasImage) {
-            // 创建多模态内容数组
-            const items = [];
-            
-            for (const item of msg.content) {
-              if (item.type === 'text') {
-                items.push({
-                  type: "text",
-                  text: item.text
-                });
-              } else if (item.type === 'image') {
-                // 检查是否包含文件ID
-                if (item.fileId) {
-                  items.push({
-                    type: "image",
-                    file_id: item.fileId // 直接使用file_id，不是嵌套的image对象
-                  });
-                } else if (item.url) {
-                  items.push({
-                    type: "image",
-                    url: item.url
-                  });
-                }
-              }
-            }
-            
-            // 使用object_string格式处理多模态内容，并将items数组序列化为字符串
-            return {
-              content_type: "object_string",
-              role: msg.role,
-              content: JSON.stringify(items),
-              type: "question"
-            };
-          } else {
-            // 如果只有文本，则提取文本内容
-            const textContent = msg.content
-              .filter(item => item.type === 'text')
-              .map(item => item.text)
-              .join(' ');
-            
+        try {
+          // 检查消息内容是否为字符串
+          if (typeof msg.content === 'string') {
             return {
               content_type: "text",
               role: msg.role,
-              content: textContent || ""
+              content: msg.content
             };
+          } 
+          // 如果是数组，处理多模态内容
+          else if (Array.isArray(msg.content)) {
+            // 处理包含图片的消息
+            const hasImage = msg.content.some(item => item.type === 'image');
+            
+            if (hasImage) {
+              // 创建多模态内容数组
+              const items = [];
+              
+              for (const item of msg.content) {
+                if (item.type === 'text') {
+                  items.push({
+                    type: "text",
+                    text: item.text
+                  });
+                } else if (item.type === 'image') {
+                  // 检查是否包含文件ID
+                  if (item.fileId) {
+                    items.push({
+                      type: "image",
+                      file_id: item.fileId // 直接使用file_id，不是嵌套的image对象
+                    });
+                  } else if (item.url) {
+                    items.push({
+                      type: "image",
+                      url: item.url
+                    });
+                  }
+                }
+              }
+              
+              // 使用object_string格式处理多模态内容，并将items数组序列化为字符串
+              return {
+                content_type: "object_string",
+                role: msg.role,
+                content: JSON.stringify(items),
+                type: "question"
+              };
+            } else {
+              // 如果只有文本，则提取文本内容
+              const textContent = msg.content
+                .filter(item => item.type === 'text')
+                .map(item => item.text)
+                .join(' ');
+              
+              return {
+                content_type: "text",
+                role: msg.role,
+                content: textContent || ""
+              };
+            }
           }
+          
+          // 默认文本消息
+          return {
+            content_type: "text",
+            role: msg.role,
+            content: String(msg.content)
+          };
+        } catch (error) {
+          console.error('处理消息内容时出错:', error);
+          // 出错时返回一个安全的默认消息
+          return {
+            content_type: "text",
+            role: msg.role,
+            content: "消息内容处理失败，请重试"
+          };
         }
-        
-        // 默认文本消息
-        return {
-          content_type: "text",
-          role: msg.role,
-          content: String(msg.content)
-        };
       });
 
     // 确保环境变量存在

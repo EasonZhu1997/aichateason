@@ -192,6 +192,35 @@ const renderTextContent = (text: string) => {
   );
 };
 
+// 添加图片组件，单独处理图片加载失败和放大功能
+const ImageComponent = ({ 
+  url, 
+  alt, 
+  onImageClick 
+}: { 
+  url: string, 
+  alt: string, 
+  onImageClick: (url: string) => void 
+}) => {
+  const [loadFailed, setLoadFailed] = useState(false);
+  
+  return loadFailed ? (
+    <div className="max-w-full rounded-md max-h-64 bg-gray-200 dark:bg-gray-700 flex items-center justify-center p-4">
+      <span className="text-gray-500 dark:text-gray-400">
+        [图片加载失败]
+      </span>
+    </div>
+  ) : (
+    <img 
+      src={url} 
+      alt={alt || '图片'} 
+      onClick={() => onImageClick(url)}
+      className="max-w-full rounded-md max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+      onError={() => setLoadFailed(true)}
+    />
+  );
+};
+
 export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating }: MessageBubbleProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [renderError, setRenderError] = useState(false);
@@ -249,11 +278,10 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
             
             return (
               <div key={index} className="my-2">
-                <img 
-                  src={item.url} 
+                <ImageComponent 
+                  url={item.url} 
                   alt={item.alt || '图片'} 
-                  onClick={() => setEnlargedImage(item.url)}
-                  className="max-w-full rounded-md max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                  onImageClick={(url) => setEnlargedImage(url)}
                 />
               </div>
             );
