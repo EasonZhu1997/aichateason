@@ -184,65 +184,21 @@ const preprocessMathExpressions = (text: string): string => {
 
 // 渲染文本内容的函数，添加错误处理
 const renderTextContent = (text: string): React.ReactNode => {
+  if (!text) return <div className="empty-content">(空内容)</div>;
+  
   try {
     // 首先预处理文本以转换数学表达式
     const processedText = preprocessMathExpressions(text);
     
-    // 使用一个包装div，但不使用全局样式，使用Tailwind CSS类
+    // 简化渲染，避免使用可能引起问题的style jsx
     return (
-      <div className="markdown-content prose-sm max-w-full break-words dark:prose-invert overflow-auto">
+      <div className="markdown-content prose-sm max-w-full break-words">
         <ReactMarkdown 
           remarkPlugins={[remarkGfm, remarkMath]}
           rehypePlugins={[rehypeKatex as any]}
         >
           {processedText}
         </ReactMarkdown>
-
-        {/* 添加CSS样式，但使用局部样式而非全局样式 */}
-        <style jsx>{`
-          .markdown-content :global(p) {
-            margin-bottom: 0.5rem;
-          }
-          .markdown-content :global(p:last-child) {
-            margin-bottom: 0;
-          }
-          .markdown-content :global(ul), .markdown-content :global(ol) {
-            list-style-type: disc;
-            list-style-position: inside;
-            margin-bottom: 0.5rem;
-          }
-          .markdown-content :global(ol) {
-            list-style-type: decimal;
-          }
-          .markdown-content :global(li) {
-            margin-bottom: 0.25rem;
-          }
-          .markdown-content :global(code) {
-            background-color: #f1f1f1;
-            border-radius: 0.25rem;
-            padding: 0.1rem 0.25rem;
-            font-family: monospace;
-            font-size: 0.875rem;
-          }
-          .markdown-content :global(pre) {
-            background-color: #f1f1f1;
-            border-radius: 0.25rem;
-            padding: 0.75rem;
-            overflow-x: auto;
-            margin: 0.75rem 0;
-          }
-          .markdown-content :global(pre code) {
-            background-color: transparent;
-            padding: 0;
-          }
-          :global(.dark) .markdown-content :global(code) {
-            background-color: #2d3748;
-            color: #e2e8f0;
-          }
-          :global(.dark) .markdown-content :global(pre) {
-            background-color: #2d3748;
-          }
-        `}</style>
       </div>
     );
   } catch (error) {
@@ -309,25 +265,40 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
   const menuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const isAssistant = message.role === 'assistant';
+  const isMounted = useRef(true); // 用于跟踪组件是否已卸载
   
   // 只在文本内容上使用复制按钮
   const isTextOnlyContent = isContentString(message.content) || 
     (Array.isArray(message.content) && message.content.every(item => item.type === 'text'));
   
+  // 在组件卸载时设置isMounted标志
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+  
   // 获取纯文本内容用于复制
   const getTextContent = (): string => {
-    if (isContentString(message.content)) {
-      return message.content;
-    }
+    if (!message || !message.content) return '';
     
-    if (Array.isArray(message.content)) {
-      return message.content
-        .filter(item => item.type === 'text')
-        .map(item => (item.type === 'text' ? item.text : ''))
-        .join('\n');
+    try {
+      if (isContentString(message.content)) {
+        return message.content;
+      }
+      
+      if (Array.isArray(message.content)) {
+        return message.content
+          .filter(item => item.type === 'text')
+          .map(item => (item.type === 'text' ? item.text : ''))
+          .join('\n');
+      }
+      
+      return typeof message.content === 'object' ? JSON.stringify(message.content) : String(message.content);
+    } catch (error) {
+      console.error('获取文本内容失败:', error);
+      return '';
     }
-    
-    return '';
   };
   
   // 辅助函数：渲染消息内容
@@ -378,7 +349,9 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
   useEffect(() => {
     if (renderError) {
       const timer = setTimeout(() => {
-        setRenderError(false);
+        if (isMounted.current) {
+          setRenderError(false);
+        }
       }, 100);
       return () => clearTimeout(timer);
     }
@@ -398,76 +371,92 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
     };
   }, []);
 
-  // 优化的文本复制函数，添加多层错误处理和回退方案
+  // 完全重写的复制函数，避免未处理的Promise异常
   const handleCopy = () => {
-    if (!message || !message.content) {
-      console.error('没有可复制的内容');
-      return;
-    }
-
     try {
-      // 获取要复制的文本
-      const textToCopy = typeof message.content === 'string' 
-        ? message.content 
-        : extractTextContent(message.content) || '无可复制的内容';
+      // 获取要复制的文本，避免直接访问可能为null的属性
+      const textToCopy = getTextContent();
       
-      // 使用更安全的非异步复制方法，避免可能的Promise未处理错误
-      // 备用方法1: execCommand
-      try {
+      if (!textToCopy) {
+        console.warn('没有可复制的文本内容');
+        return;
+      }
+      
+      // 使用execCommand方法，同步操作，避免Promise异常
+      const copyUsingExecCommand = () => {
         const textarea = document.createElement('textarea');
         textarea.value = textToCopy;
+        
+        // 确保textarea在视窗之外
         textarea.style.position = 'fixed';
-        textarea.style.left = '-999999px';
-        textarea.style.top = '-999999px';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '-9999px';
+        
+        // 添加到DOM、选择文本并执行复制
         document.body.appendChild(textarea);
         textarea.focus();
         textarea.select();
         
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        
-        if (successful) {
-          setShowCopySuccess(true);
-          setTimeout(() => setShowCopySuccess(false), 2000);
-          return; // 成功复制，提前返回
-        } else {
-          console.error('execCommand复制失败');
+        let success = false;
+        try {
+          success = document.execCommand('copy');
+        } catch (e) {
+          console.error('execCommand复制失败:', e);
         }
-      } catch (execCommandError) {
-        console.error('execCommand方法失败:', execCommandError);
+        
+        // 清理DOM
+        document.body.removeChild(textarea);
+        return success;
+      };
+      
+      // 尝试使用execCommand复制
+      if (copyUsingExecCommand()) {
+        if (isMounted.current) {
+          setShowCopySuccess(true);
+          // 设置定时器清除成功状态
+          setTimeout(() => {
+            if (isMounted.current) {
+              setShowCopySuccess(false);
+            }
+          }, 2000);
+        }
+        return;
       }
       
-      // 尝试使用现代Clipboard API（同步包装，避免未处理的Promise）
+      // 如果execCommand失败，尝试使用Clipboard API
+      // 但要特别注意Promise处理
       if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        // 封装在全局try-catch中
         try {
-          navigator.clipboard.writeText(textToCopy).then(() => {
-            setShowCopySuccess(true);
-            setTimeout(() => setShowCopySuccess(false), 2000);
-          }).catch(error => {
-            console.error('剪贴板API失败:', error);
-            // 在开发环境中显示错误
-            if (process.env.NODE_ENV === 'development') {
-              console.error('详细错误:', error);
-            }
-            
-            // 提示用户手动复制
-            try {
-              window.prompt('自动复制失败。请手动复制以下文本:', textToCopy);
-            } catch (e) {
-              // 防止prompt抛出错误
-              console.error('提示框显示失败');
-            }
-          });
+          navigator.clipboard.writeText(textToCopy)
+            .then(() => {
+              // 检查组件是否仍然挂载
+              if (isMounted.current) {
+                setShowCopySuccess(true);
+                setTimeout(() => {
+                  if (isMounted.current) {
+                    setShowCopySuccess(false);
+                  }
+                }, 2000);
+              }
+            })
+            .catch(err => {
+              console.error('Clipboard API复制失败:', err);
+              // 使用同步的方式提示用户
+              if (isMounted.current) {
+                // 在这里就不再尝试使用window.prompt了，避免可能的浏览器阻止
+                console.warn('无法自动复制文本，请用户手动复制');
+              }
+            });
         } catch (e) {
-          console.error('调用clipboard API时出错', e);
+          console.error('调用Clipboard API出错:', e);
         }
+      } else {
+        console.warn('浏览器不支持复制功能');
       }
     } catch (error) {
+      // 捕获整个操作中可能的任何错误
       console.error('复制过程中发生错误:', error);
-      // 防止未处理的异常
-      if (process.env.NODE_ENV === 'development') {
-        console.error('详细错误信息:', error);
-      }
     }
   };
 
@@ -494,7 +483,9 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
       return renderMessageContent(message.content);
     } catch (error) {
       console.error('安全渲染失败:', error);
-      setRenderError(true);
+      
+      // 避免在异常处理过程中调用setState，而是返回备用内容
+      // 不再调用 setRenderError(true)，改为外部控制
       
       // 尝试获取纯文本内容
       try {
@@ -512,6 +503,25 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
     }
   };
 
+  // 外部错误处理，避免在渲染函数中设置状态
+  const handleRenderError = (error: any) => {
+    console.error('渲染过程中发生错误:', error);
+    if (isMounted.current) {
+      setRenderError(true);
+    }
+  };
+
+  // 主渲染逻辑
+  let renderedContent;
+  try {
+    renderedContent = renderError 
+      ? <div className="whitespace-pre-wrap">{getTextContent()}</div>
+      : renderMessageSafely();
+  } catch (error) {
+    handleRenderError(error);
+    renderedContent = <div className="whitespace-pre-wrap">{getTextContent()}</div>;
+  }
+
   return (
     <div className="relative" ref={cardRef}>
       <div>
@@ -524,11 +534,7 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
           <div className="flex flex-col w-full">
             {/* 渲染消息内容 */}
             <div className="w-full overflow-x-auto">
-              {renderError ? (
-                renderTextContent(getTextContent())
-              ) : (
-                renderMessageSafely()
-              )}
+              {renderedContent}
             </div>
             
             {/* 时间戳和操作按钮 */}
@@ -591,7 +597,10 @@ export function MessageBubble({ message, onRegenerate, onDelete, isRegenerating 
           <div className="relative max-w-[90vw] max-h-[90vh]">
             <button
               className="absolute top-2 right-2 p-1 rounded-full bg-black bg-opacity-50 text-white hover:bg-opacity-70 transition-opacity"
-              onClick={() => setEnlargedImage(null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEnlargedImage(null);
+              }}
             >
               <X size={24} />
             </button>

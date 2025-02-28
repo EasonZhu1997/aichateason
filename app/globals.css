@@ -75,6 +75,112 @@ body {
   }
 }
 
+/* Markdown样式 */
+.markdown-content p {
+  margin-bottom: 0.5rem;
+}
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+.markdown-content ul, .markdown-content ol {
+  list-style-type: disc;
+  list-style-position: inside;
+  margin-bottom: 0.5rem;
+  padding-left: 1rem;
+}
+.markdown-content ol {
+  list-style-type: decimal;
+}
+.markdown-content li {
+  margin-bottom: 0.25rem;
+}
+.markdown-content code {
+  background-color: #f1f1f1;
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.25rem;
+  font-family: monospace;
+  font-size: 0.875rem;
+}
+.markdown-content pre {
+  background-color: #f1f1f1;
+  border-radius: 0.25rem;
+  padding: 0.75rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+.markdown-content pre code {
+  background-color: transparent;
+  padding: 0;
+}
+.markdown-content h1 {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin: 1rem 0 0.5rem 0;
+}
+.markdown-content h2 {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin: 1rem 0 0.5rem 0;
+}
+.markdown-content h3, .markdown-content h4 {
+  font-size: 1.1rem;
+  font-weight: bold;
+  margin: 0.75rem 0 0.5rem 0;
+}
+.markdown-content blockquote {
+  border-left: 4px solid #e2e8f0;
+  padding-left: 1rem;
+  color: #4a5568;
+  margin: 0.75rem 0;
+}
+.markdown-content hr {
+  margin: 1rem 0;
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+}
+.markdown-content a {
+  color: #3182ce;
+  text-decoration: none;
+}
+.markdown-content a:hover {
+  text-decoration: underline;
+}
+.markdown-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0;
+}
+.markdown-content th, .markdown-content td {
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem;
+  text-align: left;
+}
+.markdown-content th {
+  background-color: #f7fafc;
+}
+
+/* 深色模式适配 */
+.dark .markdown-content code {
+  background-color: #2d3748;
+  color: #e2e8f0;
+}
+.dark .markdown-content pre {
+  background-color: #2d3748;
+}
+.dark .markdown-content blockquote {
+  border-color: #4a5568;
+  color: #e2e8f0;
+}
+.dark .markdown-content a {
+  color: #63b3ed;
+}
+.dark .markdown-content th, .dark .markdown-content td {
+  border-color: #4a5568;
+}
+.dark .markdown-content th {
+  background-color: #2d3748;
+}
+
 /* 隐藏所有错误相关元素 */
 #__next-error-overlay,
 #__next-error,

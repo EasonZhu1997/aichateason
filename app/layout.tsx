@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "分掌门AI答疑老师",
-  description: "分掌门AI答疑老师",
+  title: "AI日语老师",
+  description: "AI日语老师",
   icons: {
     icon: '/fzmlogo.png'
   }

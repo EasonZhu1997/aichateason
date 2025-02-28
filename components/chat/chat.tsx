@@ -3,7 +3,7 @@
 import { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { Message, MessageContent, isContentString, streamChat } from '@/services/chat';
 import { Card } from '@/components/ui/card';
-import { UserCircle, Bot, Upload, X, Image as ImageIcon } from 'lucide-react';
+import { UserCircle, Bot, Upload, X, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { MessageBubble } from './message-bubble';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -33,7 +33,7 @@ const globalStyles = `
 const MODELS = [
   {
     id: 'coze',
-    name: '分掌门AI答疑老师',
+    name: 'AI日语老师',
     useCozeAPI: true
   }
 ] as const;
@@ -41,13 +41,13 @@ const MODELS = [
 const SYSTEM_MESSAGE = {
   id: 'system-message',
   role: 'system' as const,
-  content: '你是一个分掌门的AI答疑老师，可以帮助学生回答问题，请始终使用中文回复。保持热心、友好和专业的态度。',
+  content: '你是一个AI日语老师，可以帮助学生回答问题，请始终使用日文中文双语同时回复。保持热心、友好和专业的态度，引导学生的学习兴趣。',
   timestamp: new Date().toLocaleTimeString()
 } satisfies Message;
 
 const WELCOME_MESSAGE: Omit<Message, 'timestamp' | 'id'> = {
   role: 'assistant',
-  content: '你好！我是分掌门AI答疑老师。我可以帮你解决问题等。请告诉我你需要什么帮助？'
+  content: '你好！我是AI日语老师。我可以帮你学习日语。请告诉我你需要什么帮助？'
 };
 
 // 添加常量定义
@@ -963,8 +963,12 @@ export function ChatComponent() {
               message.role === 'user' ? 'justify-end' : 'justify-start'
             }`}>
               {message.role !== 'user' && (
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center">
-                  <Bot size={20} />
+                <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden">
+                  <img 
+                    src="/custom-avatar.png" 
+                    alt="AI头像" 
+                    className="w-full h-full object-cover"
+                  />
                 </div>
               )}
               <div className={`flex-1 max-w-[85%] ${message.role === 'user' ? 'ml-12' : 'mr-12'}`}>
@@ -993,8 +997,12 @@ export function ChatComponent() {
           {/* 当前正在输入的消息 */}
           {currentMessage && (
             <div className="flex items-start gap-3 justify-start">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center">
-                <Bot size={20} />
+              <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden">
+                <img 
+                  src="/custom-avatar.png" 
+                  alt="AI头像" 
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div className="flex-1 max-w-[85%] mr-12">
                 <Card className="p-4 shadow-sm bg-gray-100 dark:bg-gray-700 dark:text-gray-200">
