@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Card } from '@/components/ui/card';
-import { Bot, UserCircle, Copy, MessageSquare, RefreshCw, Trash2 } from 'lucide-react';
+import { Bot, UserCircle, Copy, MessageSquare, RefreshCw, Trash2, Edit, X, Check } from 'lucide-react';
 import { Message } from '@/services/chat';
 import { select } from 'select';
 
@@ -9,6 +9,7 @@ interface MessageBubbleProps {
   message: Message;
   onRegenerate?: () => void;
   onDelete?: () => void;
+  onEdit?: (content: string) => void;
   isRegenerating?: boolean;
 }
 
@@ -16,14 +17,18 @@ export function MessageBubble({
   message, 
   onRegenerate, 
   onDelete,
+  onEdit,
   isRegenerating = false 
 }: MessageBubbleProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [isSelectable, setIsSelectable] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
   const timeoutRef = useRef<NodeJS.Timeout>();
   const bubbleRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const isTouchMovedRef = useRef(false);
   const scrollPositionRef = useRef(0);
@@ -50,12 +55,25 @@ export function MessageBubble({
     }
   }, [showMenu]);
 
+  // 当进入编辑模式时，设置输入框的初始值
+  useEffect(() => {
+    if (isEditing && message.content) {
+      setEditContent(message.content);
+      // 聚焦输入框
+      setTimeout(() => {
+        if (editInputRef.current) {
+          editInputRef.current.focus();
+        }
+      }, 0);
+    }
+  }, [isEditing, message.content]);
+
   const updateMenuPosition = (x: number, y: number) => {
     if (!bubbleRef.current) return;
     
     const bubbleRect = bubbleRef.current.getBoundingClientRect();
     const menuWidth = 192; // w-48 = 12rem = 192px
-    const menuHeight = 140; // 估计的菜单高度
+    const menuHeight = 180; // 估计的菜单高度，增加了修改按钮
     
     // 计算最佳位置
     let menuX = x - menuWidth / 2; // 默认在触摸点水平居中
@@ -238,6 +256,25 @@ export function MessageBubble({
     }
   };
 
+  const handleEdit = () => {
+    if (message.role === 'user' && message.content) {
+      setIsEditing(true);
+      setShowMenu(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditContent('');
+  };
+
+  const handleSubmitEdit = () => {
+    if (onEdit && editContent.trim()) {
+      onEdit(editContent.trim());
+      setIsEditing(false);
+    }
+  };
+
   // 组件卸载时的清理
   useEffect(() => {
     return () => {
@@ -253,52 +290,83 @@ export function MessageBubble({
 
   return (
     <div className="relative">
-      <div
-        ref={bubbleRef}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onContextMenu={(e) => e.preventDefault()}
-        onDoubleClick={handleSelect}
-        className={`relative transition-transform duration-200 ${
-          showMenu ? 'scale-[1.02] z-50 overflow-auto max-h-[70vh]' : ''
-        } ${isSelectable ? 'selecting' : 'select-none'}`}
-        style={{
-          WebkitTouchCallout: 'none',
-          WebkitUserSelect: isSelectable ? 'text' : 'none',
-          MozUserSelect: isSelectable ? 'text' : 'none',
-          msUserSelect: isSelectable ? 'text' : 'none',
-          userSelect: isSelectable ? 'text' : 'none',
-        }}
-      >
-        <Card 
-          className={`p-4 shadow-sm ${
-            message.role === 'user' 
-              ? 'bg-blue-500 text-white dark:bg-blue-600' 
-              : 'bg-gray-100 dark:bg-gray-700 dark:text-gray-200'
-          } ${
-            showMenu ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
-          }`}
-        >
-          <div className="flex flex-col">
-            {isRegenerating ? (
-              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>正在重新生成...</span>
-              </div>
-            ) : (
-              <p className="whitespace-pre-wrap">{message.content}</p>
-            )}
-            <span className={`text-xs mt-2 ${
-              message.role === 'user' 
-                ? 'text-blue-100 dark:text-blue-200' 
-                : 'text-gray-500 dark:text-gray-400'
-            }`}>
-              {message.timestamp}
-            </span>
+      {isEditing && message.role === 'user' ? (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end justify-center p-4">
+          <div className="w-full max-w-3xl bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <input
+              ref={editInputRef}
+              type="text"
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              className="w-full p-3 border-b dark:border-gray-700 focus:outline-none dark:bg-gray-800 dark:text-white"
+              placeholder="修改消息..."
+            />
+            <div className="flex">
+              <button 
+                onClick={handleCancelEdit}
+                className="flex-1 p-3 flex items-center justify-center gap-2 border-r dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <X className="w-4 h-4" />
+                取消
+              </button>
+              <button 
+                onClick={handleSubmitEdit}
+                className="flex-1 p-3 flex items-center justify-center gap-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+              >
+                <Check className="w-4 h-4" />
+                确认
+              </button>
+            </div>
           </div>
-        </Card>
-      </div>
+        </div>
+      ) : (
+        <div
+          ref={bubbleRef}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onContextMenu={(e) => e.preventDefault()}
+          onDoubleClick={handleSelect}
+          className={`relative transition-transform duration-200 ${
+            showMenu ? 'scale-[1.02] z-50 overflow-auto max-h-[70vh]' : ''
+          } ${isSelectable ? 'selecting' : 'select-none'}`}
+          style={{
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: isSelectable ? 'text' : 'none',
+            MozUserSelect: isSelectable ? 'text' : 'none',
+            msUserSelect: isSelectable ? 'text' : 'none',
+            userSelect: isSelectable ? 'text' : 'none',
+          }}
+        >
+          <Card 
+            className={`p-4 shadow-sm ${
+              message.role === 'user' 
+                ? 'bg-blue-500 text-white dark:bg-blue-600' 
+                : 'bg-gray-100 dark:bg-gray-700 dark:text-gray-200'
+            } ${
+              showMenu ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
+            }`}
+          >
+            <div className="flex flex-col">
+              {isRegenerating ? (
+                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>正在重新生成...</span>
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap">{message.content}</p>
+              )}
+              <span className={`text-xs mt-2 ${
+                message.role === 'user' 
+                  ? 'text-blue-100 dark:text-blue-200' 
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}>
+                {message.timestamp}
+              </span>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* 背景遮罩 */}
       {showMenu && (
@@ -329,6 +397,20 @@ export function MessageBubble({
                      w-48 flex flex-col"
         >
           <div className="flex-1">
+            {/* 添加修改按钮，仅当消息是用户发送的时候显示 */}
+            {message.role === 'user' && onEdit && (
+              <>
+                <button 
+                  onClick={handleEdit}
+                  className="flex items-center w-full px-4 py-3 text-sm text-gray-700 dark:text-gray-200 
+                           hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <Edit className="w-4 h-4 mr-3" />
+                  修改
+                </button>
+                <div className="h-[1px] bg-gray-200 dark:bg-gray-700" />
+              </>
+            )}
             <button 
               onClick={handleCopy}
               className="flex items-center w-full px-4 py-3 text-sm text-gray-700 dark:text-gray-200 
